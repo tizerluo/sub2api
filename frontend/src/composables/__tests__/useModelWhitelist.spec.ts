@@ -27,19 +27,20 @@ describe('useModelWhitelist', () => {
     expect(models).not.toContain('gpt-5.2-codex')
   })
 
-  it('antigravity 模型列表包含图片模型兼容项', () => {
+  it('antigravity 模型列表不包含 REST 不可用的图片模型', () => {
     const models = getModelsByPlatform('antigravity')
 
-    expect(models).toContain('gemini-2.5-flash-image')
-    expect(models).toContain('gemini-3.1-flash-image')
-    expect(models).toContain('gemini-3-pro-image')
+    expect(models).not.toContain('gemini-2.5-flash-image')
+    expect(models).not.toContain('gemini-3.1-flash-image')
+    expect(models).not.toContain('gemini-3-pro-image')
   })
 
   it('Claude 模型列表包含新发布的 Claude 模型', () => {
     expect(getModelsByPlatform('claude')).toContain('claude-fable-5')
-    expect(getModelsByPlatform('antigravity')).toContain('claude-fable-5')
     expect(getModelsByPlatform('claude')).toContain('claude-opus-4-8')
-    expect(getModelsByPlatform('antigravity')).toContain('claude-opus-4-8')
+    // antigravity 不再暴露 Claude 模型（REST 不可用）
+    expect(getModelsByPlatform('antigravity')).not.toContain('claude-fable-5')
+    expect(getModelsByPlatform('antigravity')).not.toContain('claude-opus-4-8')
   })
 
   it('gemini 模型列表包含原生生图模型', () => {
@@ -51,11 +52,13 @@ describe('useModelWhitelist', () => {
     expect(models.indexOf('gemini-2.5-flash-image')).toBeLessThan(models.indexOf('gemini-2.5-flash'))
   })
 
-  it('antigravity 模型列表会把新的 Gemini 图片模型排在前面', () => {
+  it('antigravity 模型列表包含 4 个 REST 可用 Gemini 模型', () => {
     const models = getModelsByPlatform('antigravity')
 
-    expect(models.indexOf('gemini-3.1-flash-image')).toBeLessThan(models.indexOf('gemini-2.5-flash'))
-    expect(models.indexOf('gemini-2.5-flash-image')).toBeLessThan(models.indexOf('gemini-2.5-flash-lite'))
+    expect(models).toContain('gemini-2.5-pro')
+    expect(models).toContain('gemini-2.5-flash')
+    expect(models).toContain('gemini-2.5-flash-lite')
+    expect(models).toContain('gemini-3.1-flash-lite')
   })
 
   it('antigravity 模型列表包含 Gemini 3.1 Pro 通用别名', () => {
