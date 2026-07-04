@@ -22,6 +22,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/tidwall/gjson"
@@ -129,22 +130,23 @@ func (e *PromptTooLongError) Error() string {
 
 // antigravityRetryLoopParams 重试循环的参数
 type antigravityRetryLoopParams struct {
-	ctx             context.Context
-	prefix          string
-	account         *Account
-	proxyURL        string
-	accessToken     string
-	action          string
-	body            []byte
-	c               *gin.Context
-	httpUpstream    HTTPUpstream
-	settingService  *SettingService
-	accountRepo     AccountRepository // 用于智能重试的模型级别限流
-	handleError     func(ctx context.Context, prefix string, account *Account, statusCode int, headers http.Header, body []byte, requestedModel string, groupID int64, sessionHash string, isStickySession bool) *handleModelRateLimitResult
-	requestedModel  string // 用于限流检查的原始请求模型
-	isStickySession bool   // 是否为粘性会话（用于账号切换时的缓存计费判断）
-	groupID         int64  // 用于模型级限流时清除粘性会话
-	sessionHash     string // 用于模型级限流时清除粘性会话
+	ctx                 context.Context
+	prefix              string
+	account             *Account
+	proxyURL            string
+	accessToken         string
+	action              string
+	body                []byte
+	c                   *gin.Context
+	httpUpstream        HTTPUpstream
+	settingService      *SettingService
+	accountRepo         AccountRepository // 用于智能重试的模型级别限流
+	handleError         func(ctx context.Context, prefix string, account *Account, statusCode int, headers http.Header, body []byte, requestedModel string, groupID int64, sessionHash string, isStickySession bool) *handleModelRateLimitResult
+	requestedModel      string                        // 用于限流检查的原始请求模型
+	isStickySession     bool                          // 是否为粘性会话（用于账号切换时的缓存计费判断）
+	groupID             int64                         // 用于模型级限流时清除粘性会话
+	sessionHash         string                        // 用于模型级限流时清除粘性会话
+	tlsFPProfileService *TLSFingerprintProfileService // TLS 指纹解析，用于 DoWithTLS
 }
 
 // antigravityRetryLoopResult 重试循环的结果
@@ -186,6 +188,12 @@ type smartRetryResult struct {
 // handleSmartRetry 处理 OAuth 账号的智能重试逻辑
 // 将 429/503 限流处理逻辑抽取为独立函数，减少 antigravityRetryLoop 的复杂度
 func (s *AntigravityGatewayService) handleSmartRetry(p antigravityRetryLoopParams, resp *http.Response, respBody []byte, baseURL string, urlIdx int, availableURLs []string) *smartRetryResult {
+	// 构造 TLS 指纹 profile，供本方法内的重试请求复用，确保与主路径一致携带指纹。
+	var profile *tlsfingerprint.Profile
+	if p.tlsFPProfileService != nil {
+		profile = p.tlsFPProfileService.ResolveTLSProfile(p.account)
+	}
+
 	// "Resource has been exhausted" 是 URL 级别限流，切换 URL（仅 429）
 	if resp.StatusCode == http.StatusTooManyRequests && isURLLevelRateLimit(respBody) && urlIdx < len(availableURLs)-1 {
 		logger.LegacyPrintf("service.antigravity_gateway", "%s URL fallback (429): %s -> %s", p.prefix, baseURL, availableURLs[urlIdx+1])
@@ -308,7 +316,7 @@ func (s *AntigravityGatewayService) handleSmartRetry(p antigravityRetryLoopParam
 				}
 			}
 
-			retryResp, retryErr := p.httpUpstream.Do(retryReq, p.proxyURL, p.account.ID, p.account.Concurrency)
+			retryResp, retryErr := p.httpUpstream.DoWithTLS(retryReq, p.proxyURL, p.account.ID, p.account.Concurrency, profile)
 			if retryErr == nil && retryResp != nil && retryResp.StatusCode != http.StatusTooManyRequests && retryResp.StatusCode != http.StatusServiceUnavailable {
 				log.Printf("%s status=%d smart_retry_success attempt=%d/%d", p.prefix, retryResp.StatusCode, attempt, maxAttempts)
 				// 重试成功，清除 MODEL_CAPACITY_EXHAUSTED cooldown
@@ -436,6 +444,12 @@ func (s *AntigravityGatewayService) handleSingleAccountRetryInPlace(
 	waitDuration time.Duration,
 	modelName string,
 ) *smartRetryResult {
+	// 构造 TLS 指纹 profile，供本方法内的重试请求复用，确保与主路径一致携带指纹。
+	var profile *tlsfingerprint.Profile
+	if p.tlsFPProfileService != nil {
+		profile = p.tlsFPProfileService.ResolveTLSProfile(p.account)
+	}
+
 	// 限制单次等待时间
 	if waitDuration > antigravitySingleAccountSmartRetryMaxWait {
 		waitDuration = antigravitySingleAccountSmartRetryMaxWait
@@ -483,7 +497,7 @@ func (s *AntigravityGatewayService) handleSingleAccountRetryInPlace(
 			break
 		}
 
-		retryResp, retryErr := p.httpUpstream.Do(retryReq, p.proxyURL, p.account.ID, p.account.Concurrency)
+		retryResp, retryErr := p.httpUpstream.DoWithTLS(retryReq, p.proxyURL, p.account.ID, p.account.Concurrency, profile)
 		if retryErr == nil && retryResp != nil && retryResp.StatusCode != http.StatusTooManyRequests && retryResp.StatusCode != http.StatusServiceUnavailable {
 			logger.LegacyPrintf("service.antigravity_gateway", "%s status=%d single_account_503_retry_success attempt=%d/%d total_waited=%v",
 				p.prefix, retryResp.StatusCode, attempt, antigravitySingleAccountSmartRetryMaxAttempts, totalWaited)
@@ -545,6 +559,13 @@ func (s *AntigravityGatewayService) handleSingleAccountRetryInPlace(
 
 // antigravityRetryLoop 执行带 URL fallback 的重试循环
 func (s *AntigravityGatewayService) antigravityRetryLoop(p antigravityRetryLoopParams) (*antigravityRetryLoopResult, error) {
+	// 构造 TLS 指纹 profile，供本方法内所有上游请求（主路径 + 重试/fallback）复用，
+	// 确保启用 TLS 的账号首次请求与重试请求一致地携带指纹。
+	var profile *tlsfingerprint.Profile
+	if p.tlsFPProfileService != nil {
+		profile = p.tlsFPProfileService.ResolveTLSProfile(p.account)
+	}
+
 	// 预检查：模型限流 + overages 启用 + 积分未耗尽 → 直接注入 AI Credits
 	overagesInjected := false
 	if p.requestedModel != "" && p.account.Platform == PlatformAntigravity &&
@@ -621,7 +642,7 @@ urlFallbackLoop:
 				return nil, err
 			}
 
-			resp, err = p.httpUpstream.Do(upstreamReq, p.proxyURL, p.account.ID, p.account.Concurrency)
+			resp, err = p.httpUpstream.DoWithTLS(upstreamReq, p.proxyURL, p.account.ID, p.account.Concurrency, profile)
 			if err == nil && resp == nil {
 				err = errors.New("upstream returned nil response")
 			}
@@ -858,14 +879,15 @@ func logPrefix(sessionID, accountName string) string {
 
 // AntigravityGatewayService 处理 Antigravity 平台的 API 转发
 type AntigravityGatewayService struct {
-	accountRepo       AccountRepository
-	tokenProvider     *AntigravityTokenProvider
-	rateLimitService  *RateLimitService
-	httpUpstream      HTTPUpstream
-	settingService    *SettingService
-	cache             GatewayCache // 用于模型级限流时清除粘性会话绑定
-	schedulerSnapshot *SchedulerSnapshotService
-	internal500Cache  Internal500CounterCache // INTERNAL 500 渐进惩罚计数器
+	accountRepo         AccountRepository
+	tokenProvider       *AntigravityTokenProvider
+	rateLimitService    *RateLimitService
+	httpUpstream        HTTPUpstream
+	settingService      *SettingService
+	cache               GatewayCache // 用于模型级限流时清除粘性会话绑定
+	schedulerSnapshot   *SchedulerSnapshotService
+	internal500Cache    Internal500CounterCache // INTERNAL 500 渐进惩罚计数器
+	tlsFPProfileService *TLSFingerprintProfileService
 }
 
 func (s *AntigravityGatewayService) upstreamErrorBodyReadLimit() int64 {
@@ -893,16 +915,18 @@ func NewAntigravityGatewayService(
 	httpUpstream HTTPUpstream,
 	settingService *SettingService,
 	internal500Cache Internal500CounterCache,
+	tlsFPProfileService *TLSFingerprintProfileService,
 ) *AntigravityGatewayService {
 	return &AntigravityGatewayService{
-		accountRepo:       accountRepo,
-		tokenProvider:     tokenProvider,
-		rateLimitService:  rateLimitService,
-		httpUpstream:      httpUpstream,
-		settingService:    settingService,
-		cache:             cache,
-		schedulerSnapshot: schedulerSnapshot,
-		internal500Cache:  internal500Cache,
+		accountRepo:         accountRepo,
+		tokenProvider:       tokenProvider,
+		rateLimitService:    rateLimitService,
+		httpUpstream:        httpUpstream,
+		settingService:      settingService,
+		cache:               cache,
+		schedulerSnapshot:   schedulerSnapshot,
+		internal500Cache:    internal500Cache,
+		tlsFPProfileService: tlsFPProfileService,
 	}
 }
 
@@ -1050,14 +1074,10 @@ func resolveAntigravityProjectID(account *Account) (string, error) {
 }
 
 // applyThinkingModelSuffix 根据 thinking 配置调整模型名
-// 当映射结果是 claude-sonnet-4-5 且请求开启了 thinking 时，改为 claude-sonnet-4-5-thinking
+// 当前 Antigravity REST 路径只走 Gemini 模型，不需要 thinking 后缀转换。
+// 保留函数签名以兼容调用方，行为为直接透传。
 func applyThinkingModelSuffix(mappedModel string, thinkingEnabled bool) string {
-	if !thinkingEnabled {
-		return mappedModel
-	}
-	if mappedModel == "claude-sonnet-4-5" {
-		return "claude-sonnet-4-5-thinking"
-	}
+	_ = thinkingEnabled // 保留参数以兼容调用方，当前无 thinking 后缀转换逻辑
 	return mappedModel
 }
 
@@ -1119,19 +1139,20 @@ func (s *AntigravityGatewayService) TestConnection(ctx context.Context, account 
 	// 复用 antigravityRetryLoop：完整的重试 / credits overages / 智能重试
 	prefix := fmt.Sprintf("[antigravity-Test] account=%d(%s)", account.ID, account.Name)
 	p := antigravityRetryLoopParams{
-		ctx:            ctx,
-		prefix:         prefix,
-		account:        account,
-		proxyURL:       proxyURL,
-		accessToken:    accessToken,
-		action:         "streamGenerateContent",
-		body:           requestBody,
-		c:              nil, // 无 gin.Context → 跳过 ops 追踪
-		httpUpstream:   s.httpUpstream,
-		settingService: s.settingService,
-		accountRepo:    s.accountRepo,
-		requestedModel: modelID,
-		handleError:    testConnectionHandleError,
+		ctx:                 ctx,
+		prefix:              prefix,
+		account:             account,
+		proxyURL:            proxyURL,
+		accessToken:         accessToken,
+		action:              "streamGenerateContent",
+		body:                requestBody,
+		c:                   nil, // 无 gin.Context → 跳过 ops 追踪
+		httpUpstream:        s.httpUpstream,
+		settingService:      s.settingService,
+		accountRepo:         s.accountRepo,
+		requestedModel:      modelID,
+		handleError:         testConnectionHandleError,
+		tlsFPProfileService: s.tlsFPProfileService,
 	}
 
 	result, err := s.antigravityRetryLoop(p)
@@ -1412,7 +1433,7 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 		MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalFeatureGate)
 		return nil, s.writeClaudeError(c, http.StatusForbidden, "permission_error", fmt.Sprintf("model %s not in whitelist", claudeReq.Model))
 	}
-	// 应用 thinking 模式自动后缀：如果 thinking 开启且目标是 claude-sonnet-4-5，自动改为 thinking 版本
+	// applyThinkingModelSuffix 当前为透传（Antigravity REST 路径只走 Gemini，不需要 thinking 后缀转换）
 	thinkingEnabled := claudeReq.Thinking != nil && (claudeReq.Thinking.Type == "enabled" || claudeReq.Thinking.Type == "adaptive")
 	mappedModel = applyThinkingModelSuffix(mappedModel, thinkingEnabled)
 	billingModel := mappedModel
@@ -1458,22 +1479,23 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 
 	// 执行带重试的请求
 	result, err := s.antigravityRetryLoop(antigravityRetryLoopParams{
-		ctx:             ctx,
-		prefix:          prefix,
-		account:         account,
-		proxyURL:        proxyURL,
-		accessToken:     accessToken,
-		action:          action,
-		body:            geminiBody,
-		c:               c,
-		httpUpstream:    s.httpUpstream,
-		settingService:  s.settingService,
-		accountRepo:     s.accountRepo,
-		handleError:     s.handleUpstreamError,
-		requestedModel:  originalModel,
-		isStickySession: isStickySession, // Forward 由上层判断粘性会话
-		groupID:         0,               // Forward 方法没有 groupID，由上层处理粘性会话清除
-		sessionHash:     "",              // Forward 方法没有 sessionHash，由上层处理粘性会话清除
+		ctx:                 ctx,
+		prefix:              prefix,
+		account:             account,
+		proxyURL:            proxyURL,
+		accessToken:         accessToken,
+		action:              action,
+		body:                geminiBody,
+		c:                   c,
+		httpUpstream:        s.httpUpstream,
+		settingService:      s.settingService,
+		accountRepo:         s.accountRepo,
+		handleError:         s.handleUpstreamError,
+		requestedModel:      originalModel,
+		isStickySession:     isStickySession, // Forward 由上层判断粘性会话
+		groupID:             0,               // Forward 方法没有 groupID，由上层处理粘性会话清除
+		sessionHash:         "",              // Forward 方法没有 sessionHash，由上层处理粘性会话清除
+		tlsFPProfileService: s.tlsFPProfileService,
 	})
 	if err != nil {
 		// 检查是否是账号切换信号，转换为 UpstreamFailoverError 让 Handler 切换账号
@@ -1542,22 +1564,23 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 					continue
 				}
 				retryResult, retryErr := s.antigravityRetryLoop(antigravityRetryLoopParams{
-					ctx:             ctx,
-					prefix:          prefix,
-					account:         account,
-					proxyURL:        proxyURL,
-					accessToken:     accessToken,
-					action:          action,
-					body:            retryGeminiBody,
-					c:               c,
-					httpUpstream:    s.httpUpstream,
-					settingService:  s.settingService,
-					accountRepo:     s.accountRepo,
-					handleError:     s.handleUpstreamError,
-					requestedModel:  originalModel,
-					isStickySession: isStickySession,
-					groupID:         0,  // Forward 方法没有 groupID，由上层处理粘性会话清除
-					sessionHash:     "", // Forward 方法没有 sessionHash，由上层处理粘性会话清除
+					ctx:                 ctx,
+					prefix:              prefix,
+					account:             account,
+					proxyURL:            proxyURL,
+					accessToken:         accessToken,
+					action:              action,
+					body:                retryGeminiBody,
+					c:                   c,
+					httpUpstream:        s.httpUpstream,
+					settingService:      s.settingService,
+					accountRepo:         s.accountRepo,
+					handleError:         s.handleUpstreamError,
+					requestedModel:      originalModel,
+					isStickySession:     isStickySession,
+					groupID:             0,  // Forward 方法没有 groupID，由上层处理粘性会话清除
+					sessionHash:         "", // Forward 方法没有 sessionHash，由上层处理粘性会话清除
+					tlsFPProfileService: s.tlsFPProfileService,
 				})
 				if retryErr != nil {
 					appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
@@ -1664,22 +1687,23 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 					retryGeminiBody, txErr := antigravity.TransformClaudeToGeminiWithOptions(&retryClaudeReq, projectID, mappedModel, transformOpts)
 					if txErr == nil {
 						retryResult, retryErr := s.antigravityRetryLoop(antigravityRetryLoopParams{
-							ctx:             ctx,
-							prefix:          prefix,
-							account:         account,
-							proxyURL:        proxyURL,
-							accessToken:     accessToken,
-							action:          action,
-							body:            retryGeminiBody,
-							c:               c,
-							httpUpstream:    s.httpUpstream,
-							settingService:  s.settingService,
-							accountRepo:     s.accountRepo,
-							handleError:     s.handleUpstreamError,
-							requestedModel:  originalModel,
-							isStickySession: isStickySession,
-							groupID:         0,
-							sessionHash:     "",
+							ctx:                 ctx,
+							prefix:              prefix,
+							account:             account,
+							proxyURL:            proxyURL,
+							accessToken:         accessToken,
+							action:              action,
+							body:                retryGeminiBody,
+							c:                   c,
+							httpUpstream:        s.httpUpstream,
+							settingService:      s.settingService,
+							accountRepo:         s.accountRepo,
+							handleError:         s.handleUpstreamError,
+							requestedModel:      originalModel,
+							isStickySession:     isStickySession,
+							groupID:             0,
+							sessionHash:         "",
+							tlsFPProfileService: s.tlsFPProfileService,
 						})
 						if retryErr == nil {
 							retryResp := retryResult.resp
@@ -2238,22 +2262,23 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 
 	// 执行带重试的请求
 	result, err := s.antigravityRetryLoop(antigravityRetryLoopParams{
-		ctx:             ctx,
-		prefix:          prefix,
-		account:         account,
-		proxyURL:        proxyURL,
-		accessToken:     accessToken,
-		action:          upstreamAction,
-		body:            wrappedBody,
-		c:               c,
-		httpUpstream:    s.httpUpstream,
-		settingService:  s.settingService,
-		accountRepo:     s.accountRepo,
-		handleError:     s.handleUpstreamError,
-		requestedModel:  originalModel,
-		isStickySession: isStickySession, // ForwardGemini 由上层判断粘性会话
-		groupID:         forwardOpts.groupID,
-		sessionHash:     forwardOpts.sessionHash,
+		ctx:                 ctx,
+		prefix:              prefix,
+		account:             account,
+		proxyURL:            proxyURL,
+		accessToken:         accessToken,
+		action:              upstreamAction,
+		body:                wrappedBody,
+		c:                   c,
+		httpUpstream:        s.httpUpstream,
+		settingService:      s.settingService,
+		accountRepo:         s.accountRepo,
+		handleError:         s.handleUpstreamError,
+		requestedModel:      originalModel,
+		isStickySession:     isStickySession, // ForwardGemini 由上层判断粘性会话
+		groupID:             forwardOpts.groupID,
+		sessionHash:         forwardOpts.sessionHash,
+		tlsFPProfileService: s.tlsFPProfileService,
 	})
 	if err != nil {
 		// 检查是否是账号切换信号，转换为 UpstreamFailoverError 让 Handler 切换账号
@@ -2295,7 +2320,11 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 				if err == nil {
 					fallbackReq, err := antigravity.NewAPIRequest(ctx, upstreamAction, accessToken, fallbackWrapped)
 					if err == nil {
-						fallbackResp, err := s.httpUpstream.Do(fallbackReq, proxyURL, account.ID, account.Concurrency)
+						var fallbackProfile *tlsfingerprint.Profile
+						if s.tlsFPProfileService != nil {
+							fallbackProfile = s.tlsFPProfileService.ResolveTLSProfile(account)
+						}
+						fallbackResp, err := s.httpUpstream.DoWithTLS(fallbackReq, proxyURL, account.ID, account.Concurrency, fallbackProfile)
 						if err == nil && fallbackResp.StatusCode < 400 {
 							_ = resp.Body.Close()
 							resp = fallbackResp
@@ -2337,22 +2366,23 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 			retryWrappedBody, wrapErr := s.wrapV1InternalRequest(projectID, mappedModel, cleanedInjectedBody)
 			if wrapErr == nil {
 				retryResult, retryErr := s.antigravityRetryLoop(antigravityRetryLoopParams{
-					ctx:             ctx,
-					prefix:          prefix,
-					account:         account,
-					proxyURL:        proxyURL,
-					accessToken:     accessToken,
-					action:          upstreamAction,
-					body:            retryWrappedBody,
-					c:               c,
-					httpUpstream:    s.httpUpstream,
-					settingService:  s.settingService,
-					accountRepo:     s.accountRepo,
-					handleError:     s.handleUpstreamError,
-					requestedModel:  originalModel,
-					isStickySession: isStickySession,
-					groupID:         forwardOpts.groupID,
-					sessionHash:     forwardOpts.sessionHash,
+					ctx:                 ctx,
+					prefix:              prefix,
+					account:             account,
+					proxyURL:            proxyURL,
+					accessToken:         accessToken,
+					action:              upstreamAction,
+					body:                retryWrappedBody,
+					c:                   c,
+					httpUpstream:        s.httpUpstream,
+					settingService:      s.settingService,
+					accountRepo:         s.accountRepo,
+					handleError:         s.handleUpstreamError,
+					requestedModel:      originalModel,
+					isStickySession:     isStickySession,
+					groupID:             forwardOpts.groupID,
+					sessionHash:         forwardOpts.sessionHash,
+					tlsFPProfileService: s.tlsFPProfileService,
 				})
 				if retryErr == nil {
 					retryResp := retryResult.resp
@@ -4357,7 +4387,11 @@ func (s *AntigravityGatewayService) ForwardUpstream(ctx context.Context, c *gin.
 	}
 
 	// 发送请求
-	resp, err := s.httpUpstream.Do(req, proxyURL, account.ID, account.Concurrency)
+	var profile *tlsfingerprint.Profile
+	if s.tlsFPProfileService != nil {
+		profile = s.tlsFPProfileService.ResolveTLSProfile(account)
+	}
+	resp, err := s.httpUpstream.DoWithTLS(req, proxyURL, account.ID, account.Concurrency, profile)
 	if err != nil {
 		logger.LegacyPrintf("service.antigravity_gateway", "%s upstream request failed: %v", prefix, err)
 		return nil, fmt.Errorf("upstream request failed: %w", err)

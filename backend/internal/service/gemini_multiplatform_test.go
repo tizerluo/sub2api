@@ -912,10 +912,10 @@ func TestGeminiMessagesCompatService_isModelSupportedByAccount(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:     "Antigravity平台-支持claude模型",
+			name:     "Antigravity平台-不支持claude模型（默认映射已移除claude条目）",
 			account:  &Account{Platform: PlatformAntigravity},
 			model:    "claude-sonnet-4-5",
-			expected: true,
+			expected: false,
 		},
 		{
 			name:     "Antigravity平台-不支持gpt模型",

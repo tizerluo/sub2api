@@ -42,9 +42,9 @@ func TestResolveAccountUpstreamModel_Antigravity(t *testing.T) {
 	account := &Account{
 		Platform: PlatformAntigravity,
 	}
-	// Antigravity 平台使用 DefaultAntigravityModelMapping
-	got := resolveAccountUpstreamModel(account, "claude-sonnet-4-6")
-	require.Equal(t, "claude-sonnet-4-6", got)
+	// Antigravity 平台使用 DefaultAntigravityModelMapping（当前仅含 Gemini REST 模型）
+	got := resolveAccountUpstreamModel(account, "gemini-2.5-flash")
+	require.Equal(t, "gemini-2.5-flash", got)
 }
 
 func TestResolveAccountUpstreamModel_Antigravity_Unsupported(t *testing.T) {
@@ -247,10 +247,10 @@ func TestIsUpstreamModelRestrictedByChannel_Restricted(t *testing.T) {
 	svc := &GatewayService{channelService: channelSvc}
 
 	account := &Account{Platform: PlatformAntigravity}
-	// claude-sonnet-4-6 在 DefaultAntigravityModelMapping 中，映射后仍为 claude-sonnet-4-6
+	// gemini-2.5-flash 在 DefaultAntigravityModelMapping 中（REST 透传），映射后仍为 gemini-2.5-flash
 	// 但定价列表只有 claude-opus-4-6
-	require.True(t, svc.isUpstreamModelRestrictedByChannel(context.Background(), 10, account, "claude-sonnet-4-6"),
-		"upstream model claude-sonnet-4-6 NOT in pricing → restricted")
+	require.True(t, svc.isUpstreamModelRestrictedByChannel(context.Background(), 10, account, "gemini-2.5-flash"),
+		"upstream model gemini-2.5-flash NOT in pricing → restricted")
 }
 
 func TestIsUpstreamModelRestrictedByChannel_Allowed(t *testing.T) {
