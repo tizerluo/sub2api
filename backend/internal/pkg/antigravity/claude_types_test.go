@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func TestDefaultModels_ContainsNewAndLegacyImageModels(t *testing.T) {
+func TestDefaultModels_ContainsActualSupportedModels(t *testing.T) {
 	t.Parallel()
 
 	models := DefaultModels()
@@ -13,21 +13,25 @@ func TestDefaultModels_ContainsNewAndLegacyImageModels(t *testing.T) {
 		byID[m.ID] = m
 	}
 
+	// 实测 2026-07-04：Google AI Pro 订阅实际支持的 6 个模型
 	requiredIDs := []string{
-		"claude-fable-5",
-		"claude-opus-4-8",
+		"gemini-3.1-pro-high",
+		"gemini-3.1-pro-low",
+		"gemini-3-flash",
+		"claude-sonnet-4-6-thinking",
 		"claude-opus-4-6-thinking",
-		"gemini-2.5-flash-image",
-		"gemini-2.5-flash-image-preview",
-		"gemini-3.1-flash-image",
-		"gemini-3.1-flash-image-preview",
-		"gemini-3-pro-image", // legacy compatibility
+		"gpt-oss-120b-medium",
 	}
 
 	for _, id := range requiredIDs {
 		if _, ok := byID[id]; !ok {
 			t.Fatalf("expected model %q to be exposed in DefaultModels", id)
 		}
+	}
+
+	// 总数应该是 6 个（2 Claude + 3 Gemini + 1 GPT-OSS）
+	if len(models) != 6 {
+		t.Fatalf("expected 6 models, got %d: %v", len(models), byID)
 	}
 }
 

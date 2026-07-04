@@ -2069,10 +2069,24 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 		return
 	}
 
-	// Handle Antigravity accounts: return Claude + Gemini models
+	// Handle Antigravity accounts: return models from mapping (or default list)
 	if account.Platform == service.PlatformAntigravity {
-		// 直接复用 antigravity.DefaultModels()，与 /v1/models 端点保持同步
-		response.Success(c, antigravity.DefaultModels())
+		// 如果账号有自定义 model_mapping，从 mapping 构建；否则用默认列表
+		mapping := account.GetModelMapping()
+		if len(mapping) > 0 {
+			models := make([]antigravity.ClaudeModel, 0, len(mapping))
+			seen := make(map[string]bool)
+			for alias, target := range mapping {
+				if !seen[alias] {
+					seen[alias] = true
+					models = append(models, antigravity.ClaudeModel{ID: alias, Type: "model", DisplayName: alias})
+				}
+				_ = target
+			}
+			response.Success(c, models)
+		} else {
+			response.Success(c, antigravity.DefaultModels())
+		}
 		return
 	}
 
