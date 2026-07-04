@@ -13,14 +13,13 @@ func TestDefaultModels_ContainsActualSupportedModels(t *testing.T) {
 		byID[m.ID] = m
 	}
 
-	// 实测 2026-07-04：Google AI Pro 订阅实际支持的 6 个模型
+	// 实测 2026-07-04：通过 REST streamGenerateContent 可用的 4 个 Gemini 模型
+	// （retrieveUserQuota 权威确认）。Claude/GPT-OSS 走 gRPC 路径，REST 不可用。
 	requiredIDs := []string{
-		"gemini-3.1-pro-high",
-		"gemini-3.1-pro-low",
-		"gemini-3-flash",
-		"claude-sonnet-4-6-thinking",
-		"claude-opus-4-6-thinking",
-		"gpt-oss-120b-medium",
+		"gemini-2.5-pro",
+		"gemini-2.5-flash",
+		"gemini-2.5-flash-lite",
+		"gemini-3.1-flash-lite",
 	}
 
 	for _, id := range requiredIDs {
@@ -29,9 +28,8 @@ func TestDefaultModels_ContainsActualSupportedModels(t *testing.T) {
 		}
 	}
 
-	// 总数应该是 6 个（2 Claude + 3 Gemini + 1 GPT-OSS）
-	if len(models) != 6 {
-		t.Fatalf("expected 6 models, got %d: %v", len(models), byID)
+	if len(models) != 4 {
+		t.Fatalf("expected 4 models, got %d: %v", len(models), byID)
 	}
 }
 

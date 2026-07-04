@@ -152,22 +152,18 @@ type modelDef struct {
 	IsReasoning bool
 }
 
-// Antigravity 支持的 Claude 模型（实测 2026-07-04，Google AI Pro 订阅）
-var claudeModels = []modelDef{
-	{ID: "claude-sonnet-4-6-thinking", DisplayName: "Claude Sonnet 4.6 (Thinking)", CreatedAt: "2026-02-17T00:00:00Z", IsReasoning: true},
-	{ID: "claude-opus-4-6-thinking", DisplayName: "Claude Opus 4.6 (Thinking)", CreatedAt: "2026-02-05T00:00:00Z", IsReasoning: true},
-}
+// Antigravity 通过 REST streamGenerateContent 可用的模型。
+// 注意：agy UI 显示更多模型（含 Claude/GPT-OSS），但那些走 gRPC
+// CloudCode/GenerateChat 路径，sub2api 的 REST 中继不可用。
+// 权威来源：retrieveUserQuota 返回的 modelId（实测 2026-07-04）。
+var claudeModels = []modelDef{}
+var gptossModels = []modelDef{}
 
-// Antigravity 支持的 Gemini 模型（实测 2026-07-04，Google AI Pro 订阅）
 var geminiModels = []modelDef{
-	{ID: "gemini-3.1-pro-high", DisplayName: "Gemini 3.1 Pro (High)", CreatedAt: "2026-02-19T00:00:00Z", IsReasoning: true},
-	{ID: "gemini-3.1-pro-low", DisplayName: "Gemini 3.1 Pro (Low)", CreatedAt: "2026-02-19T00:00:00Z"},
-	{ID: "gemini-3-flash", DisplayName: "Gemini 3 Flash", CreatedAt: "2025-06-01T00:00:00Z"},
-}
-
-// Antigravity 支持的 GPT-OSS 模型（实测 2026-07-04，Google AI Pro 订阅）
-var gptossModels = []modelDef{
-	{ID: "gpt-oss-120b-medium", DisplayName: "GPT-OSS 120B (Medium)", CreatedAt: "2025-01-01T00:00:00Z"},
+	{ID: "gemini-2.5-pro", DisplayName: "Gemini 2.5 Pro", CreatedAt: "2025-01-01T00:00:00Z", IsReasoning: true},
+	{ID: "gemini-2.5-flash", DisplayName: "Gemini 2.5 Flash", CreatedAt: "2025-01-01T00:00:00Z"},
+	{ID: "gemini-2.5-flash-lite", DisplayName: "Gemini 2.5 Flash Lite", CreatedAt: "2025-01-01T00:00:00Z"},
+	{ID: "gemini-3.1-flash-lite", DisplayName: "Gemini 3.1 Flash Lite", CreatedAt: "2026-02-19T00:00:00Z"},
 }
 
 // ========== Claude API 格式 (/v1/models) ==========
