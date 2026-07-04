@@ -737,7 +737,7 @@ func TestAntigravityRetryLoop_PreCheck_NoSingleAccountRetry_SwitchesOnRateLimit(
 		Concurrency: 1,
 		Extra: map[string]any{
 			modelRateLimitsKey: map[string]any{
-				"claude-sonnet-4-5": map[string]any{
+				"gemini-2.5-flash": map[string]any{
 					"rate_limit_reset_at": time.Now().Add(30 * time.Second).Format(time.RFC3339),
 				},
 			},
@@ -753,7 +753,7 @@ func TestAntigravityRetryLoop_PreCheck_NoSingleAccountRetry_SwitchesOnRateLimit(
 		action:         "generateContent",
 		body:           []byte(`{"input":"test"}`),
 		httpUpstream:   upstream,
-		requestedModel: "claude-sonnet-4-5",
+		requestedModel: "gemini-2.5-flash",
 		handleError: func(ctx context.Context, prefix string, account *Account, statusCode int, headers http.Header, body []byte, requestedModel string, groupID int64, sessionHash string, isStickySession bool) *handleModelRateLimitResult {
 			return nil
 		},
@@ -765,7 +765,7 @@ func TestAntigravityRetryLoop_PreCheck_NoSingleAccountRetry_SwitchesOnRateLimit(
 	var switchErr *AntigravityAccountSwitchError
 	require.ErrorAs(t, err, &switchErr, "should return AntigravityAccountSwitchError")
 	require.Equal(t, account.ID, switchErr.OriginalAccountID)
-	require.Equal(t, "claude-sonnet-4-5", switchErr.RateLimitedModel)
+	require.Equal(t, "gemini-2.5-flash", switchErr.RateLimitedModel)
 
 	// upstream 不应被调用（预检查就短路了）
 	require.Equal(t, 0, upstream.calls, "upstream should NOT be called when pre-check blocks")

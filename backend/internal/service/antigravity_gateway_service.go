@@ -1050,14 +1050,10 @@ func resolveAntigravityProjectID(account *Account) (string, error) {
 }
 
 // applyThinkingModelSuffix 根据 thinking 配置调整模型名
-// 当映射结果是 claude-sonnet-4-5 且请求开启了 thinking 时，改为 claude-sonnet-4-5-thinking
+// 当前 Antigravity REST 路径只走 Gemini 模型，不需要 thinking 后缀转换。
+// 保留函数签名以兼容调用方，行为为直接透传。
 func applyThinkingModelSuffix(mappedModel string, thinkingEnabled bool) string {
-	if !thinkingEnabled {
-		return mappedModel
-	}
-	if mappedModel == "claude-sonnet-4-5" {
-		return "claude-sonnet-4-5-thinking"
-	}
+	_ = thinkingEnabled // 保留参数以兼容调用方，当前无 thinking 后缀转换逻辑
 	return mappedModel
 }
 
@@ -1412,7 +1408,7 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 		MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalFeatureGate)
 		return nil, s.writeClaudeError(c, http.StatusForbidden, "permission_error", fmt.Sprintf("model %s not in whitelist", claudeReq.Model))
 	}
-	// 应用 thinking 模式自动后缀：如果 thinking 开启且目标是 claude-sonnet-4-5，自动改为 thinking 版本
+	// applyThinkingModelSuffix 当前为透传（Antigravity REST 路径只走 Gemini，不需要 thinking 后缀转换）
 	thinkingEnabled := claudeReq.Thinking != nil && (claudeReq.Thinking.Type == "enabled" || claudeReq.Thinking.Type == "adaptive")
 	mappedModel = applyThinkingModelSuffix(mappedModel, thinkingEnabled)
 	billingModel := mappedModel

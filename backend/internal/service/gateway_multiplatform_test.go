@@ -366,7 +366,7 @@ func TestGatewayService_SelectAccountForModelWithPlatform_Antigravity(t *testing
 		cfg:         testConfig(),
 	}
 
-	acc, err := svc.selectAccountForModelWithPlatform(ctx, nil, "", "claude-sonnet-4-5", nil, PlatformAntigravity)
+	acc, err := svc.selectAccountForModelWithPlatform(ctx, nil, "", "gemini-2.5-flash", nil, PlatformAntigravity)
 	require.NoError(t, err)
 	require.NotNil(t, acc)
 	require.Equal(t, int64(2), acc.ID)
@@ -704,7 +704,7 @@ func TestGatewayService_SelectAccountForModelWithExclusions_ForcePlatform(t *tes
 		cfg:         testConfig(),
 	}
 
-	acc, err := svc.SelectAccountForModelWithExclusions(ctx, nil, "", "claude-sonnet-4-5", nil)
+	acc, err := svc.SelectAccountForModelWithExclusions(ctx, nil, "", "gemini-2.5-flash", nil)
 	require.NoError(t, err)
 	require.NotNil(t, acc)
 	require.Equal(t, int64(2), acc.ID)
@@ -1097,10 +1097,10 @@ func TestGatewayService_isModelSupportedByAccount(t *testing.T) {
 		expected bool
 	}{
 		{
-			name:     "Antigravity平台-支持默认映射中的claude模型",
+			name:     "Antigravity平台-不支持默认映射外的claude模型",
 			account:  &Account{Platform: PlatformAntigravity},
 			model:    "claude-sonnet-4-5",
-			expected: true,
+			expected: false,
 		},
 		{
 			name:     "Antigravity平台-不支持非默认映射中的claude模型",
@@ -1234,7 +1234,7 @@ func TestGatewayService_selectAccountWithMixedScheduling(t *testing.T) {
 			cfg:         testConfig(),
 		}
 
-		acc, err := svc.selectAccountWithMixedScheduling(ctx, nil, "", "claude-sonnet-4-5", nil, PlatformAnthropic)
+		acc, err := svc.selectAccountWithMixedScheduling(ctx, nil, "", "gemini-2.5-flash", nil, PlatformAnthropic)
 		require.NoError(t, err)
 		require.NotNil(t, acc)
 		require.Equal(t, int64(2), acc.ID, "应选择优先级最高的账户（包含启用混合调度的antigravity）")
@@ -1295,7 +1295,7 @@ func TestGatewayService_selectAccountWithMixedScheduling(t *testing.T) {
 			cfg:         testConfig(),
 		}
 
-		acc, err := svc.selectAccountWithMixedScheduling(ctx, nil, "", "gemini-3-pro-preview", nil, PlatformGemini)
+		acc, err := svc.selectAccountWithMixedScheduling(ctx, nil, "", "gemini-2.5-flash", nil, PlatformGemini)
 		require.NoError(t, err)
 		require.NotNil(t, acc)
 		require.Equal(t, int64(3), acc.ID)
@@ -1337,12 +1337,14 @@ func TestGatewayService_selectAccountWithMixedScheduling(t *testing.T) {
 		acc, err := svc.selectAccountWithMixedScheduling(ctx, nil, "", "claude-sonnet-4-5", nil, PlatformAnthropic)
 		require.NoError(t, err)
 		require.NotNil(t, acc)
-		require.Equal(t, int64(1), acc.ID)
+		// 当前 DefaultAntigravityModelMapping 已无 claude 条目，Antigravity 账户不再服务 claude；
+		// 因此 claude 调度只落在 Anthropic 账户（acct 2），与 gemini 家族限流无关。
+		require.Equal(t, int64(2), acc.ID)
 	})
 
 	t.Run("混合调度-路由优先选择路由账号", func(t *testing.T) {
 		groupID := int64(30)
-		requestedModel := "claude-sonnet-4-5"
+		requestedModel := "gemini-2.5-flash"
 		repo := &mockAccountRepoForPlatform{
 			accounts: []Account{
 				{ID: 1, Platform: PlatformAnthropic, Priority: 1, Status: StatusActive, Schedulable: true},
@@ -1387,7 +1389,7 @@ func TestGatewayService_selectAccountWithMixedScheduling(t *testing.T) {
 
 	t.Run("混合调度-路由粘性命中", func(t *testing.T) {
 		groupID := int64(31)
-		requestedModel := "claude-sonnet-4-5"
+		requestedModel := "gemini-2.5-flash"
 		repo := &mockAccountRepoForPlatform{
 			accounts: []Account{
 				{ID: 1, Platform: PlatformAnthropic, Priority: 1, Status: StatusActive, Schedulable: true},
@@ -1684,7 +1686,7 @@ func TestGatewayService_selectAccountWithMixedScheduling(t *testing.T) {
 			cfg:         testConfig(),
 		}
 
-		acc, err := svc.selectAccountWithMixedScheduling(ctx, nil, "session-123", "claude-sonnet-4-5", nil, PlatformAnthropic)
+		acc, err := svc.selectAccountWithMixedScheduling(ctx, nil, "session-123", "gemini-2.5-flash", nil, PlatformAnthropic)
 		require.NoError(t, err)
 		require.NotNil(t, acc)
 		require.Equal(t, int64(2), acc.ID, "应返回粘性会话绑定的启用mixed_scheduling的antigravity账户")
@@ -1816,7 +1818,7 @@ func TestGatewayService_selectAccountWithMixedScheduling(t *testing.T) {
 			cfg:         testConfig(),
 		}
 
-		acc, err := svc.selectAccountWithMixedScheduling(ctx, nil, "", "claude-sonnet-4-5", nil, PlatformAnthropic)
+		acc, err := svc.selectAccountWithMixedScheduling(ctx, nil, "", "gemini-2.5-flash", nil, PlatformAnthropic)
 		require.NoError(t, err)
 		require.NotNil(t, acc)
 		require.Equal(t, int64(1), acc.ID)

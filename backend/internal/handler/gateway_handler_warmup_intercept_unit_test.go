@@ -237,7 +237,7 @@ func TestGatewayHandlerMessages_InterceptWarmup_AntigravityAccount_MixedScheduli
 	c, _ := gin.CreateTestContext(rec)
 
 	body := []byte(`{
-		"model": "claude-sonnet-4-5",
+		"model": "gemini-2.5-flash",
 		"max_tokens": 256,
 		"messages": [{"role":"user","content":[{"type":"text","text":"Warmup"}]}]
 	}`)
@@ -274,7 +274,7 @@ func TestGatewayHandlerMessages_InterceptWarmup_AntigravityAccount_MixedScheduli
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.Equal(t, "msg_mock_warmup", resp["id"])
-	require.Equal(t, "claude-sonnet-4-5", resp["model"])
+	require.Equal(t, "gemini-2.5-flash", resp["model"])
 
 	content, ok := resp["content"].([]any)
 	require.True(t, ok)
@@ -320,7 +320,7 @@ func TestGatewayHandlerMessages_InterceptWarmup_AntigravityAccount_ForcePlatform
 	c, _ := gin.CreateTestContext(rec)
 
 	body := []byte(`{
-		"model": "claude-sonnet-4-5",
+		"model": "gemini-2.5-flash",
 		"max_tokens": 256,
 		"messages": [{"role":"user","content":[{"type":"text","text":"Warmup"}]}]
 	}`)
@@ -363,5 +363,5 @@ func TestGatewayHandlerMessages_InterceptWarmup_AntigravityAccount_ForcePlatform
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.Equal(t, "msg_mock_warmup", resp["id"])
-	require.Equal(t, "claude-sonnet-4-5", resp["model"])
+	require.Equal(t, "gemini-2.5-flash", resp["model"])
 }
