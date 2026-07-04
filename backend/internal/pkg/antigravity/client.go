@@ -43,10 +43,13 @@ func NewAPIRequestWithURL(ctx context.Context, baseURL, action, accessToken stri
 		return nil, err
 	}
 
-	// 基础 Headers（与 Antigravity-Manager 保持一致，只设置这 3 个）
+	// 基础 Headers（与真实 Antigravity/Gemini CLI 保持一致）
+	// 之前只发 3 个头，缺少 X-Goog-Api-Client——真实 CLI (Node/gRPC) 会发送此头，
+	// 缺失会增大被 Google 滥用检测 ML 识别的概率。
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("User-Agent", GetUserAgentForContext(ctx))
+	req.Header.Set("X-Goog-Api-Client", "gl-node/22.21.1")
 
 	return req, nil
 }
