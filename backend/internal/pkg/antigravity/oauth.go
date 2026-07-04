@@ -38,7 +38,10 @@ const (
 	AntigravityUserAgentVersionEnv = "ANTIGRAVITY_USER_AGENT_VERSION"
 
 	// DefaultUserAgentVersion 是未通过环境变量或后台设置覆盖时使用的默认版本号。
-	DefaultUserAgentVersion = "1.23.2"
+	// 必须匹配当前 Antigravity CLI (agy) 的版本号——Google 在 streamGenerateContent
+	// 端点检查 User-Agent，只允许 agy/* 格式的 UA（2026-06-18 Gemini CLI 停服后加的检测）。
+	// antigravity/* 格式的 UA 会被 403 拒绝。
+	DefaultUserAgentVersion = "1.0.16"
 
 	// 固定的 redirect_uri（用户需手动复制 code）
 	RedirectURI = "http://localhost:8085/callback"
@@ -124,11 +127,14 @@ func GetUserAgentVersionForContext(ctx context.Context) string {
 }
 
 // BuildUserAgent 使用指定版本号构造 User-Agent；版本为空或非法时回退默认值。
+// 格式为 agy/<version>——匹配 Antigravity CLI (agy) 的 UA 格式。
+// Google 的 streamGenerateContent 端点只允许 agy/* 格式的 UA（2026-06-18 后），
+// antigravity/* 格式会被 403 拒绝。
 func BuildUserAgent(version string) string {
 	if normalized := NormalizeUserAgentVersion(version); normalized != "" {
-		return fmt.Sprintf("antigravity/%s windows/amd64", normalized)
+		return fmt.Sprintf("agy/%s", normalized)
 	}
-	return fmt.Sprintf("antigravity/%s windows/amd64", defaultUserAgentVersion)
+	return fmt.Sprintf("agy/%s", defaultUserAgentVersion)
 }
 
 // GetUserAgentForContext 返回当前请求应使用的 User-Agent。
