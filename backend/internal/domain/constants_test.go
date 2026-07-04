@@ -2,16 +2,18 @@ package domain
 
 import "testing"
 
-func TestDefaultAntigravityModelMapping_ImageCompatibilityAliases(t *testing.T) {
+func TestDefaultAntigravityModelMapping_LegacyCompatibilityAliases(t *testing.T) {
 	t.Parallel()
 
+	// 旧模型名映射到实际支持的模型
 	cases := map[string]string{
-		"gemini-2.5-flash-image":         "gemini-2.5-flash-image",
-		"gemini-2.5-flash-image-preview": "gemini-2.5-flash-image",
-		"gemini-3.1-flash-image":         "gemini-3.1-flash-image",
-		"gemini-3.1-flash-image-preview": "gemini-3.1-flash-image",
-		"gemini-3-pro-image":             "gemini-3.1-flash-image",
-		"gemini-3-pro-image-preview":     "gemini-3.1-flash-image",
+		"gemini-2.5-flash":      "gemini-3-flash",
+		"gemini-2.5-pro":        AntigravityGemini31ProAgentModel,
+		"gemini-3-pro-high":     AntigravityGemini31ProAgentModel,
+		"claude-opus-4-8":       "claude-opus-4-6-thinking",
+		"claude-fable-5":        "claude-opus-4-6-thinking",
+		"claude-haiku-4-5":      "claude-sonnet-4-6-thinking",
+		"claude-sonnet-4-5-20250929": "claude-sonnet-4-6-thinking",
 	}
 
 	for from, want := range cases {
@@ -25,12 +27,17 @@ func TestDefaultAntigravityModelMapping_ImageCompatibilityAliases(t *testing.T) 
 	}
 }
 
-func TestDefaultAntigravityModelMapping_ContainsNewClaudeModels(t *testing.T) {
+func TestDefaultAntigravityModelMapping_ActualSupportedModels(t *testing.T) {
 	t.Parallel()
 
+	// 实测 2026-07-04：实际支持的 6 个模型必须存在且映射到自身（或上游路由名）
 	cases := map[string]string{
-		"claude-fable-5":  "claude-fable-5",
-		"claude-opus-4-8": "claude-opus-4-8",
+		"gemini-3.1-pro-high":       AntigravityGemini31ProAgentModel,
+		"gemini-3.1-pro-low":        "gemini-3.1-pro-low",
+		"gemini-3-flash":            "gemini-3-flash",
+		"claude-sonnet-4-6-thinking": "claude-sonnet-4-6-thinking",
+		"claude-opus-4-6-thinking":   "claude-opus-4-6-thinking",
+		"gpt-oss-120b-medium":       "gpt-oss-120b-medium",
 	}
 	for from, want := range cases {
 		got, ok := DefaultAntigravityModelMapping[from]
