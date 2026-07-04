@@ -1751,11 +1751,11 @@ func (a *Account) IsAnthropicOAuthOrSetupToken() bool {
 }
 
 // IsTLSFingerprintEnabled 检查是否启用 TLS 指纹伪装
-// 仅适用于 Anthropic OAuth/SetupToken 类型账号
-// 启用后将模拟 Claude Code (Node.js) 客户端的 TLS 握手特征
+// 适用于所有 OAuth/SetupToken/apikey 类型账号（之前仅限 Anthropic）。
+// 启用后将模拟指定客户端的 TLS 握手特征，避免 Go 标准库裸指纹被上游识别。
 func (a *Account) IsTLSFingerprintEnabled() bool {
-	// 仅支持 Anthropic OAuth/SetupToken 账号
-	if !a.IsAnthropicOAuthOrSetupToken() {
+	// 支持 Anthropic/OpenAI/Gemini/Antigravity/Grok 的 OAuth/SetupToken/apikey 账号
+	if !a.IsOAuthLikeAccount() {
 		return false
 	}
 	if a.Extra == nil {
@@ -1767,6 +1767,14 @@ func (a *Account) IsTLSFingerprintEnabled() bool {
 		}
 	}
 	return false
+}
+
+// IsOAuthLikeAccount 判断是否为支持 TLS 指纹伪装的账号类型
+// （OAuth/SetupToken/apikey，排除 upstream/bedrock 等透传类型）
+func (a *Account) IsOAuthLikeAccount() bool {
+	return a.Type == AccountTypeOAuth ||
+		a.Type == AccountTypeSetupToken ||
+		a.Type == AccountTypeAPIKey
 }
 
 // GetTLSFingerprintProfileID 获取账号绑定的 TLS 指纹模板 ID
