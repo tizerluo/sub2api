@@ -71,45 +71,26 @@ const (
 // AntigravityGemini31ProAgentModel is the upstream route for Gemini 3.1 Pro High.
 const AntigravityGemini31ProAgentModel = "gemini-pro-agent"
 
-// DefaultAntigravityModelMapping 是 Antigravity 平台的默认模型映射
-// 当账号未配置 model_mapping 时使用此默认值
-// 实测 2026-07-04：Google AI Pro 订阅实际支持的 6 个模型
+// DefaultAntigravityModelMapping 是 Antigravity 平台的默认模型映射。
+// 实测 2026-07-04：通过 REST streamGenerateContent 可用的 4 个 Gemini 模型
+// （retrieveUserQuota 权威确认）。Claude/GPT-OSS 走 gRPC 路径，REST 不可用。
 var DefaultAntigravityModelMapping = map[string]string{
-	// === 实际支持的 6 个模型 ===
-	// Gemini
-	"gemini-3.1-pro-high": AntigravityGemini31ProAgentModel,
-	"gemini-3.1-pro-low":  "gemini-3.1-pro-low",
-	"gemini-3-flash":      "gemini-3-flash",
-	// Claude
-	"claude-sonnet-4-6-thinking": "claude-sonnet-4-6-thinking",
-	"claude-opus-4-6-thinking":   "claude-opus-4-6-thinking",
-	// GPT-OSS
-	"gpt-oss-120b-medium": "gpt-oss-120b-medium",
+	// === REST 可用的 4 个 Gemini 模型 ===
+	"gemini-2.5-pro":       "gemini-2.5-pro",
+	"gemini-2.5-flash":     "gemini-2.5-flash",
+	"gemini-2.5-flash-lite": "gemini-2.5-flash-lite",
+	"gemini-3.1-flash-lite": "gemini-3.1-flash-lite",
 
-	// === 旧模型名兼容映射（重定向到实际支持的模型）===
-	// 旧 Claude → 当前支持的
-	"claude-sonnet-4-6":          "claude-sonnet-4-6-thinking",
-	"claude-opus-4-6":            "claude-opus-4-6-thinking",
-	"claude-sonnet-4-5":          "claude-sonnet-4-6-thinking",
-	"claude-sonnet-4-5-thinking": "claude-sonnet-4-6-thinking",
-	"claude-opus-4-5-thinking":   "claude-opus-4-6-thinking",
-	"claude-opus-4-7":            "claude-opus-4-6-thinking",
-	"claude-opus-4-8":            "claude-opus-4-6-thinking",
-	"claude-fable-5":             "claude-opus-4-6-thinking",
-	"claude-haiku-4-5":           "claude-sonnet-4-6-thinking",
-	// 旧 Claude 版本号 ID
-	"claude-sonnet-4-5-20250929": "claude-sonnet-4-6-thinking",
-	"claude-opus-4-5-20251101":   "claude-opus-4-6-thinking",
-	"claude-haiku-4-5-20251001":  "claude-sonnet-4-6-thinking",
-	// 旧 Gemini → 当前支持的
-	"gemini-2.5-flash":          "gemini-3-flash",
-	"gemini-2.5-flash-lite":     "gemini-3-flash",
-	"gemini-2.5-pro":            AntigravityGemini31ProAgentModel,
-	"gemini-3-pro-high":         AntigravityGemini31ProAgentModel,
-	"gemini-3-pro-low":          "gemini-3.1-pro-low",
-	AntigravityGemini31ProAgentModel: AntigravityGemini31ProAgentModel,
-	"gemini-3.1-pro":                 AntigravityGemini31ProAgentModel,
-	"gemini-3.1-pro-preview":         AntigravityGemini31ProAgentModel,
+	// === agy UI 标签 → REST 模型 ID 映射 ===
+	// agy UI 显示这些标签，但 REST 端点用 Gemini 2.5 系列 ID
+	"gemini-3.1-pro-high":      "gemini-2.5-pro",
+	"gemini-3.1-pro-low":       "gemini-2.5-pro",
+	"gemini-3-flash":           "gemini-2.5-flash",
+	AntigravityGemini31ProAgentModel: "gemini-2.5-pro",
+	"gemini-3.1-pro":                "gemini-2.5-pro",
+	"gemini-3.1-pro-preview":        "gemini-2.5-pro",
+	"gemini-3-pro-high":             "gemini-2.5-pro",
+	"gemini-3-pro-low":              "gemini-2.5-pro",
 }
 
 // DefaultBedrockModelMapping 是 AWS Bedrock 平台的默认模型映射
