@@ -11,6 +11,7 @@ import (
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 )
 
@@ -36,10 +37,11 @@ type GrokQuotaResetResult struct {
 }
 
 type GrokQuotaService struct {
-	accountRepo   AccountRepository
-	proxyRepo     ProxyRepository
-	tokenProvider *GrokTokenProvider
-	httpUpstream  HTTPUpstream
+	accountRepo         AccountRepository
+	proxyRepo           ProxyRepository
+	tokenProvider       *GrokTokenProvider
+	httpUpstream        HTTPUpstream
+	tlsFPProfileService *TLSFingerprintProfileService
 }
 
 func NewGrokQuotaService(
@@ -47,12 +49,14 @@ func NewGrokQuotaService(
 	proxyRepo ProxyRepository,
 	tokenProvider *GrokTokenProvider,
 	httpUpstream HTTPUpstream,
+	tlsFPProfileService *TLSFingerprintProfileService,
 ) *GrokQuotaService {
 	return &GrokQuotaService{
-		accountRepo:   accountRepo,
-		proxyRepo:     proxyRepo,
-		tokenProvider: tokenProvider,
-		httpUpstream:  httpUpstream,
+		accountRepo:         accountRepo,
+		proxyRepo:           proxyRepo,
+		tokenProvider:       tokenProvider,
+		httpUpstream:        httpUpstream,
+		tlsFPProfileService: tlsFPProfileService,
 	}
 }
 
@@ -82,7 +86,11 @@ func (s *GrokQuotaService) ProbeUsage(ctx context.Context, accountID int64) (*Gr
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", xai.DefaultUserAgent)
 
-	resp, err := s.httpUpstream.Do(req, proxyURL, account.ID, maxInt(account.Concurrency, 1))
+	var profile *tlsfingerprint.Profile
+	if s.tlsFPProfileService != nil {
+		profile = s.tlsFPProfileService.ResolveTLSProfile(account)
+	}
+	resp, err := s.httpUpstream.DoWithTLS(req, proxyURL, account.ID, maxInt(account.Concurrency, 1), profile)
 	if err != nil {
 		return nil, infraerrors.Newf(http.StatusBadGateway, "GROK_QUOTA_PROBE_REQUEST_FAILED", "upstream probe failed: %v", err)
 	}

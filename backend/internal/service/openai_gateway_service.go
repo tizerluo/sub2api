@@ -27,6 +27,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai_compat"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
@@ -380,6 +381,7 @@ type OpenAIGatewayService struct {
 	codexSnapshotThrottle               *accountWriteThrottle
 	openaiCompatSessionResponses        sync.Map
 	openaiCompatAnthropicDigestSessions sync.Map
+	tlsFPProfileService                 *TLSFingerprintProfileService
 }
 
 // NewOpenAIGatewayService creates a new OpenAIGatewayService
@@ -406,6 +408,7 @@ func NewOpenAIGatewayService(
 	balanceNotifyService *BalanceNotifyService,
 	settingService *SettingService,
 	userPlatformQuotaRepo UserPlatformQuotaRepository,
+	tlsFPProfileService *TLSFingerprintProfileService,
 ) *OpenAIGatewayService {
 	svc := &OpenAIGatewayService{
 		accountRepo:         accountRepo,
@@ -441,6 +444,7 @@ func NewOpenAIGatewayService(
 		userPlatformQuotaRepo: userPlatformQuotaRepo,
 		responseHeaderFilter:  compileResponseHeaderFilter(cfg),
 		codexSnapshotThrottle: newAccountWriteThrottle(openAICodexSnapshotPersistMinInterval),
+		tlsFPProfileService:   tlsFPProfileService,
 	}
 	if rateLimitService != nil {
 		rateLimitService.SetAccountRuntimeBlocker(svc)
@@ -3262,7 +3266,11 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 
 		// Send request
 		upstreamStart := time.Now()
-		resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
+		var profile *tlsfingerprint.Profile
+		if s.tlsFPProfileService != nil {
+			profile = s.tlsFPProfileService.ResolveTLSProfile(account)
+		}
+		resp, err := s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, profile)
 		SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 		if err != nil {
 			// Transport-level failure (proxy/DNS/TCP/TLS — no HTTP response). Convert to
@@ -3553,7 +3561,11 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	}
 
 	upstreamStart := time.Now()
-	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
+	var profile *tlsfingerprint.Profile
+	if s.tlsFPProfileService != nil {
+		profile = s.tlsFPProfileService.ResolveTLSProfile(account)
+	}
+	resp, err := s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, profile)
 	SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 	if err != nil {
 		// Transport-level failure (proxy/DNS/TCP/TLS — no HTTP response). Convert to

@@ -14,6 +14,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -142,7 +143,11 @@ func (s *OpenAIGatewayService) forwardResponsesViaRawChatCompletions(
 	if account.Proxy != nil {
 		proxyURL = account.Proxy.URL()
 	}
-	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
+	var profile *tlsfingerprint.Profile
+	if s.tlsFPProfileService != nil {
+		profile = s.tlsFPProfileService.ResolveTLSProfile(account)
+	}
+	resp, err := s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, profile)
 	if err != nil {
 		// Transport-level failure (proxy/DNS/TCP/TLS — no HTTP response). Convert to
 		// a failover so the handler switches to a healthy account, and temporarily
