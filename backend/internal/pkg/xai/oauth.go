@@ -28,6 +28,15 @@ const (
 	DefaultRedirectURI  = "http://127.0.0.1:56121/callback"
 	SessionTTL          = 30 * time.Minute
 
+	// DefaultUserAgent 是 xAI 上游期望的客户端 User-Agent。
+	// xAI 前端要求 connect-es UA，标准 curl/python-requests UA 会被屏蔽。
+	// 不要使用暴露代理身份的 UA（如 sub2api-grok/1.0）。
+	DefaultUserAgent = "connect-es/2.0.0"
+
+	// DefaultReferrer 是 OAuth 授权 URL 中的 referrer 参数。
+	// 避免暴露代理身份（不用 "sub2api"），模拟 Grok CLI 客户端。
+	DefaultReferrer = "grok-cli"
+
 	EnvAuthorizeURL               = "XAI_OAUTH_AUTHORIZE_URL"
 	EnvTokenURL                   = "XAI_OAUTH_TOKEN_URL"
 	EnvClientID                   = "XAI_OAUTH_CLIENT_ID"
@@ -375,7 +384,7 @@ func BuildAuthorizationURL(state, codeChallenge, redirectURI, nonce string) (str
 	params.Set("code_challenge", codeChallenge)
 	params.Set("code_challenge_method", "S256")
 	params.Set("plan", "generic")
-	params.Set("referrer", "sub2api")
+	params.Set("referrer", DefaultReferrer)
 
 	return fmt.Sprintf("%s?%s", authorizeURL, params.Encode()), nil
 }

@@ -1261,7 +1261,9 @@ func (a *Account) GetOpenAIApiKey() string {
 }
 
 func (a *Account) GetOpenAIUserAgent() string {
-	if !a.IsOpenAI() {
+	// 允许 OpenAI 和 Grok 账号使用 per-account UA override。
+	// 之前只有 IsOpenAI() 生效，Grok 被排除——导致 Grok 账号即使用了 extra 设置 UA 也不生效。
+	if !a.IsOpenAI() && a.Platform != PlatformGrok {
 		return ""
 	}
 	return a.GetCredential("user_agent")
