@@ -2,6 +2,7 @@ package antigravity
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 )
 
@@ -192,12 +193,37 @@ type ClaudeModel struct {
 	CreatedAt   string `json:"created_at"`
 }
 
+// AntigravityModelsEnv 是 Antigravity 自定义模型列表的环境变量名。
+// 格式：逗号分隔的模型 ID（如 "claude-sonnet-4-6,gemini-3-flash"）。
+// 设置后 DefaultModels() 返回自定义列表，覆盖硬编码默认值。
+const AntigravityModelsEnv = "ANTIGRAVITY_MODELS"
+
 // DefaultModels 返回 Claude API 格式的模型列表（Claude + Gemini）
+// 如果设置了 ANTIGRAVITY_MODELS 环境变量，则使用自定义列表覆盖硬编码默认值。
 func DefaultModels() []ClaudeModel {
+	// 检查环境变量覆盖
+	if customModels := os.Getenv(AntigravityModelsEnv); strings.TrimSpace(customModels) != "" {
+		return parseCustomModels(customModels)
+	}
+
 	all := append(claudeModels, geminiModels...)
 	result := make([]ClaudeModel, len(all))
 	for i, m := range all {
 		result[i] = ClaudeModel{ID: m.ID, Type: "model", DisplayName: m.DisplayName, CreatedAt: m.CreatedAt}
+	}
+	return result
+}
+
+// parseCustomModels 将逗号分隔的模型 ID 字符串解析为 ClaudeModel 列表
+func parseCustomModels(models string) []ClaudeModel {
+	parts := strings.Split(models, ",")
+	result := make([]ClaudeModel, 0, len(parts))
+	for _, p := range parts {
+		id := strings.TrimSpace(p)
+		if id == "" {
+			continue
+		}
+		result = append(result, ClaudeModel{ID: id, Type: "model", DisplayName: id})
 	}
 	return result
 }
