@@ -1356,7 +1356,7 @@ func (s *AntigravityGatewayService) wrapV1InternalRequest(projectID, model strin
 	wrapped := map[string]any{
 		"project":     projectID,
 		"requestId":   "agent-" + uuid.New().String(),
-		"userAgent":   "antigravity", // 固定值，与官方客户端一致
+		"userAgent":   "agy", // 匹配 Antigravity CLI (agy)，与 HTTP User-Agent header 一致
 		"requestType": "agent",
 		"model":       model,
 		"request":     request,
