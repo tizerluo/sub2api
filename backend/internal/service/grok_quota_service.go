@@ -13,6 +13,7 @@ import (
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"golang.org/x/sync/singleflight"
 )
@@ -47,12 +48,24 @@ type GrokQuotaResetResult struct {
 }
 
 type GrokQuotaService struct {
-	accountRepo   AccountRepository
-	proxyRepo     ProxyRepository
-	tokenProvider *GrokTokenProvider
-	httpUpstream  HTTPUpstream
-	usageLogRepo  UsageLogRepository
-	probeFlight   singleflight.Group
+	accountRepo         AccountRepository
+	proxyRepo           ProxyRepository
+	tokenProvider       *GrokTokenProvider
+	httpUpstream        HTTPUpstream
+	usageLogRepo        UsageLogRepository
+	tlsFPProfileService *TLSFingerprintProfileService
+	probeFlight         singleflight.Group
+}
+
+func (s *GrokQuotaService) SetTLSFingerprintProfileService(profiles *TLSFingerprintProfileService) {
+	s.tlsFPProfileService = profiles
+}
+
+func (s *GrokQuotaService) tlsProfile(account *Account) *tlsfingerprint.Profile {
+	if s == nil || s.tlsFPProfileService == nil {
+		return nil
+	}
+	return s.tlsFPProfileService.ResolveTLSProfile(account)
 }
 
 func NewGrokQuotaService(
@@ -152,8 +165,9 @@ func (s *GrokQuotaService) probeUsage(ctx context.Context, accountID int64) (*Gr
 	if account.IsGrokOAuth() {
 		applyGrokCLIHeaders(req.Header)
 	}
+	account.ApplyHeaderOverrides(req.Header)
 
-	resp, err := s.httpUpstream.Do(req, proxyURL, account.ID, maxInt(account.Concurrency, 1))
+	resp, err := s.httpUpstream.DoWithTLS(req, proxyURL, account.ID, maxInt(account.Concurrency, 1), s.tlsProfile(account))
 	if err != nil {
 		return nil, infraerrors.Newf(http.StatusBadGateway, "GROK_QUOTA_PROBE_REQUEST_FAILED", "upstream probe failed: %v", err)
 	}
@@ -311,7 +325,8 @@ func (s *GrokQuotaService) fetchBilling(
 		return nil, 0, infraerrors.Newf(http.StatusInternalServerError, "GROK_QUOTA_PROBE_REQUEST_BUILD_FAILED", "failed to build billing request: %v", err)
 	}
 	xai.ApplyCLIBillingHeaders(req, token)
-	resp, err := s.httpUpstream.Do(req, proxyURL, account.ID, maxInt(account.Concurrency, 2))
+	account.ApplyHeaderOverrides(req.Header)
+	resp, err := s.httpUpstream.DoWithTLS(req, proxyURL, account.ID, maxInt(account.Concurrency, 2), s.tlsProfile(account))
 	if err != nil {
 		return nil, 0, infraerrors.Newf(http.StatusBadGateway, "GROK_QUOTA_PROBE_REQUEST_FAILED", "billing request failed: %v", err)
 	}
