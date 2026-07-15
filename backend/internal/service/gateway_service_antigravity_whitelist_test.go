@@ -54,13 +54,15 @@ func TestGatewayService_isModelSupportedByAccount_AntigravityNoMapping(t *testin
 		Credentials: map[string]any{},
 	}
 
-	// 默认映射中的模型应该被支持
-	require.True(t, svc.isModelSupportedByAccount(account, "claude-sonnet-4-5"))
-	require.True(t, svc.isModelSupportedByAccount(account, "gemini-3-flash"))
+	// 默认 REST 映射中的模型应该被支持
 	require.True(t, svc.isModelSupportedByAccount(account, "gemini-2.5-pro"))
-	require.True(t, svc.isModelSupportedByAccount(account, "claude-haiku-4-5"))
+	require.True(t, svc.isModelSupportedByAccount(account, "gemini-2.5-flash"))
+	require.True(t, svc.isModelSupportedByAccount(account, "gemini-2.5-flash-lite"))
+	require.True(t, svc.isModelSupportedByAccount(account, "gemini-3.1-flash-lite"))
 
-	// 不在默认映射中的模型不被支持
+	// gRPC-only 和未知模型不在默认 REST 映射中
+	require.False(t, svc.isModelSupportedByAccount(account, "claude-sonnet-4-6"))
+	require.False(t, svc.isModelSupportedByAccount(account, "gemini-3-flash"))
 	require.False(t, svc.isModelSupportedByAccount(account, "claude-3-5-sonnet-20241022"))
 	require.False(t, svc.isModelSupportedByAccount(account, "claude-unknown-model"))
 

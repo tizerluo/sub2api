@@ -13,8 +13,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	"github.com/google/uuid"
 	"github.com/tidwall/gjson"
 )
@@ -121,14 +123,26 @@ func (e *PromptTooLongError) Error() string {
 
 // AntigravityGatewayService 处理 Antigravity 平台的 API 转发
 type AntigravityGatewayService struct {
-	accountRepo       AccountRepository
-	tokenProvider     *AntigravityTokenProvider
-	rateLimitService  *RateLimitService
-	httpUpstream      HTTPUpstream
-	settingService    *SettingService
-	cache             GatewayCache // 用于模型级限流时清除粘性会话绑定
-	schedulerSnapshot *SchedulerSnapshotService
-	internal500Cache  Internal500CounterCache // INTERNAL 500 渐进惩罚计数器
+	accountRepo         AccountRepository
+	tokenProvider       *AntigravityTokenProvider
+	rateLimitService    *RateLimitService
+	httpUpstream        HTTPUpstream
+	settingService      *SettingService
+	cache               GatewayCache // 用于模型级限流时清除粘性会话绑定
+	schedulerSnapshot   *SchedulerSnapshotService
+	internal500Cache    Internal500CounterCache // INTERNAL 500 渐进惩罚计数器
+	tlsFPProfileService *TLSFingerprintProfileService
+}
+
+func (s *AntigravityGatewayService) SetTLSFingerprintProfileService(profiles *TLSFingerprintProfileService) {
+	s.tlsFPProfileService = profiles
+}
+
+func (s *AntigravityGatewayService) tlsProfile(account *Account) *tlsfingerprint.Profile {
+	if s == nil || s.tlsFPProfileService == nil {
+		return nil
+	}
+	return s.tlsFPProfileService.ResolveTLSProfile(account)
 }
 
 func (s *AntigravityGatewayService) upstreamErrorBodyReadLimit() int64 {
@@ -324,11 +338,11 @@ func applyThinkingModelSuffix(mappedModel string, thinkingEnabled bool) string {
 	return mappedModel
 }
 
-// IsModelSupported 检查模型是否被支持
-// 所有 claude- 和 gemini- 前缀的模型都能通过映射或透传支持
+// IsModelSupported reports the unconfigured REST fallback set. Explicit
+// account mappings are handled by mapAntigravityModel instead.
 func (s *AntigravityGatewayService) IsModelSupported(requestedModel string) bool {
-	return strings.HasPrefix(requestedModel, "claude-") ||
-		strings.HasPrefix(requestedModel, "gemini-")
+	_, supported := domain.DefaultAntigravityModelMapping[strings.TrimPrefix(requestedModel, "models/")]
+	return supported
 }
 
 // TestConnectionResult 测试连接结果

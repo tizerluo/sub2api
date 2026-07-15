@@ -584,14 +584,6 @@ func (a *Account) resolveModelMapping(rawMapping map[string]any) map[string]stri
 		}
 	}
 	if len(result) > 0 {
-		if a.Platform == domain.PlatformAntigravity {
-			ensureAntigravityDefaultPassthroughs(result, []string{
-				"gemini-3-flash",
-				"gemini-3.1-pro-high",
-				"gemini-3.1-pro-low",
-			})
-			applyAntigravityGemini31ProAliases(result)
-		}
 		return result
 	}
 
@@ -634,82 +626,6 @@ func modelMappingSignature(rawMapping map[string]any) uint64 {
 		_, _ = h.Write([]byte{0xff})
 	}
 	return h.Sum64()
-}
-
-func ensureAntigravityDefaultPassthrough(mapping map[string]string, model string) {
-	if mapping == nil || model == "" {
-		return
-	}
-	if _, exists := mapping[model]; exists {
-		return
-	}
-	for pattern := range mapping {
-		if matchWildcard(pattern, model) {
-			return
-		}
-	}
-	mapping[model] = model
-}
-
-func ensureAntigravityDefaultPassthroughs(mapping map[string]string, models []string) {
-	for _, model := range models {
-		ensureAntigravityDefaultPassthrough(mapping, model)
-	}
-}
-
-func applyAntigravityGemini31ProAliases(mapping map[string]string) {
-	target := strings.TrimSpace(mapping[domain.AntigravityGemini31ProAgentModel])
-	if target == "" {
-		return
-	}
-
-	aliases := []struct {
-		model         string
-		legacyTargets map[string]struct{}
-	}{
-		{
-			model: "gemini-3.1-pro",
-			legacyTargets: map[string]struct{}{
-				"gemini-3.1-pro": {},
-			},
-		},
-		{
-			model: "gemini-3.1-pro-high",
-			legacyTargets: map[string]struct{}{
-				"gemini-3.1-pro-high": {},
-			},
-		},
-		{
-			model: "gemini-3.1-pro-preview",
-			legacyTargets: map[string]struct{}{
-				"gemini-3.1-pro-preview": {},
-				"gemini-3.1-pro-high":    {},
-			},
-		},
-	}
-
-	for _, alias := range aliases {
-		current, exists := mapping[alias.model]
-		if exists {
-			if _, legacy := alias.legacyTargets[current]; legacy {
-				mapping[alias.model] = target
-			}
-			continue
-		}
-		if mappingHasWildcardForModel(mapping, alias.model) {
-			continue
-		}
-		mapping[alias.model] = target
-	}
-}
-
-func mappingHasWildcardForModel(mapping map[string]string, model string) bool {
-	for pattern := range mapping {
-		if matchWildcard(pattern, model) {
-			return true
-		}
-	}
-	return false
 }
 
 func normalizeRequestedModelForLookup(platform, requestedModel string) string {
@@ -1811,14 +1727,9 @@ func (a *Account) IsAnthropicOAuthOrSetupToken() bool {
 	return a.Platform == PlatformAnthropic && (a.Type == AccountTypeOAuth || a.Type == AccountTypeSetupToken)
 }
 
-// IsTLSFingerprintEnabled 检查是否启用 TLS 指纹伪装
-// 仅适用于 Anthropic OAuth/SetupToken 类型账号
-// 启用后将模拟 Claude Code (Node.js) 客户端的 TLS 握手特征
+// IsTLSFingerprintEnabled checks the explicit per-account switch. The caller
+// decides whether a built-in or an account-bound profile is appropriate.
 func (a *Account) IsTLSFingerprintEnabled() bool {
-	// 仅支持 Anthropic OAuth/SetupToken 账号
-	if !a.IsAnthropicOAuthOrSetupToken() {
-		return false
-	}
 	if a.Extra == nil {
 		return false
 	}

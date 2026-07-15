@@ -2409,10 +2409,34 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 		return
 	}
 
-	// Handle Antigravity accounts: return Claude + Gemini models
+	// Handle Antigravity accounts. Explicit mappings are the account's source
+	// of truth; DefaultModels is the REST fallback for unconfigured accounts.
 	if account.Platform == service.PlatformAntigravity {
-		// 直接复用 antigravity.DefaultModels()，与 /v1/models 端点保持同步
-		response.Success(c, antigravity.DefaultModels())
+		defaultModels := antigravity.DefaultModels()
+		mapping := account.GetModelMapping()
+		defaultByID := make(map[string]antigravity.ClaudeModel, len(defaultModels))
+		for _, item := range defaultModels {
+			defaultByID[item.ID] = item
+		}
+		requestedModels := make([]string, 0, len(mapping))
+		for requestedModel := range mapping {
+			requestedModels = append(requestedModels, requestedModel)
+		}
+		sort.Strings(requestedModels)
+
+		models := make([]antigravity.ClaudeModel, 0, len(requestedModels))
+		for _, requestedModel := range requestedModels {
+			if model, found := defaultByID[requestedModel]; found {
+				models = append(models, model)
+				continue
+			}
+			models = append(models, antigravity.ClaudeModel{
+				ID:          requestedModel,
+				Type:        "model",
+				DisplayName: requestedModel,
+			})
+		}
+		response.Success(c, models)
 		return
 	}
 

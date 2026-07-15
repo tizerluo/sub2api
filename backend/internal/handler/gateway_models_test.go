@@ -371,7 +371,7 @@ func TestGatewayModels_AnthropicCustomModelsListDisabledKeepsMappedModelList(t *
 	require.Equal(t, []string{"deepseek-v4-pro"}, modelIDsForTest(got.Data))
 }
 
-func TestGatewayModels_AnthropicCustomModelsListIncludesOAuthClaudeWithoutMappings(t *testing.T) {
+func TestGatewayModels_AnthropicCustomModelsListIncludesOAuthClaudeDefaultsWithoutMappings(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	groupID := int64(30)
@@ -398,7 +398,7 @@ func TestGatewayModels_AnthropicCustomModelsListIncludesOAuthClaudeWithoutMappin
 			Platform: service.PlatformAnthropic,
 			ModelsListConfig: service.GroupModelsListConfig{
 				Enabled: true,
-				Models:  []string{"claude-opus-4-6-thinking", "claude-sonnet-4-5"},
+				Models:  []string{"claude-opus-4-6", "claude-sonnet-4-6"},
 			},
 		},
 	})
@@ -409,7 +409,7 @@ func TestGatewayModels_AnthropicCustomModelsListIncludesOAuthClaudeWithoutMappin
 
 	var got gatewayModelsResponseForTest
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
-	require.Equal(t, []string{"claude-opus-4-6-thinking", "claude-sonnet-4-5"}, modelIDsForTest(got.Data))
+	require.Equal(t, []string{"claude-opus-4-6", "claude-sonnet-4-6"}, modelIDsForTest(got.Data))
 }
 
 func TestGatewayModels_CustomModelsListCanReturnEmptyWhenSelectionsUnavailable(t *testing.T) {
