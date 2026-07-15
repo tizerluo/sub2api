@@ -177,7 +177,7 @@ func TransformClaudeToGeminiWithOptions(claudeReq *ClaudeRequest, projectID, map
 	v1Req := V1InternalRequest{
 		Project:     projectID,
 		RequestID:   "agent-" + uuid.New().String(),
-		UserAgent:   "agy", // 匹配 Antigravity CLI (agy)，与 HTTP User-Agent header 一致
+		UserAgent:   "antigravity", // 固定值，与官方客户端一致
 		RequestType: requestType,
 		Model:       targetModel,
 		Request:     innerRequest,
@@ -214,8 +214,16 @@ type modelInfo struct {
 // modelInfoMap 模型前缀 → 模型信息映射
 // 只有在此映射表中的模型才会注入身份提示词
 // 注意：模型映射逻辑在网关层完成；这里仅用于按模型前缀判断是否注入身份提示词。
-// 当前 Antigravity REST 路径只走 Gemini 模型，无需 Claude 身份提示词注入。
-var modelInfoMap = map[string]modelInfo{}
+var modelInfoMap = map[string]modelInfo{
+	"claude-fable-5":    {DisplayName: "Claude Fable 5", CanonicalID: "claude-fable-5"},
+	"claude-opus-4-8":   {DisplayName: "Claude Opus 4.8", CanonicalID: "claude-opus-4-8"},
+	"claude-opus-4-7":   {DisplayName: "Claude Opus 4.7", CanonicalID: "claude-opus-4-7"},
+	"claude-opus-4-5":   {DisplayName: "Claude Opus 4.5", CanonicalID: "claude-opus-4-5-20250929"},
+	"claude-opus-4-6":   {DisplayName: "Claude Opus 4.6", CanonicalID: "claude-opus-4-6"},
+	"claude-sonnet-4-6": {DisplayName: "Claude Sonnet 4.6", CanonicalID: "claude-sonnet-4-6"},
+	"claude-sonnet-4-5": {DisplayName: "Claude Sonnet 4.5", CanonicalID: "claude-sonnet-4-5-20250929"},
+	"claude-haiku-4-5":  {DisplayName: "Claude Haiku 4.5", CanonicalID: "claude-haiku-4-5-20251001"},
+}
 
 // getModelInfo 根据模型 ID 获取模型信息（前缀匹配）
 func getModelInfo(modelID string) (info modelInfo, matched bool) {
@@ -229,6 +237,14 @@ func getModelInfo(modelID string) (info modelInfo, matched bool) {
 	}
 
 	return info, bestMatch != ""
+}
+
+// GetModelDisplayName 根据模型 ID 获取人类可读的显示名称
+func GetModelDisplayName(modelID string) string {
+	if info, ok := getModelInfo(modelID); ok {
+		return info.DisplayName
+	}
+	return modelID
 }
 
 // buildModelIdentityText 构建模型身份提示文本

@@ -387,7 +387,7 @@ func TestAntigravityGatewayService_Forward_PromptTooLong(t *testing.T) {
 	c, _ := gin.CreateTestContext(writer)
 
 	body, err := json.Marshal(map[string]any{
-		"model": "gemini-2.5-flash",
+		"model": "gemini-2.5-pro",
 		"messages": []map[string]any{
 			{"role": "user", "content": "hi"},
 		},
@@ -451,7 +451,7 @@ func TestAntigravityGatewayService_Forward_ModelRateLimitTriggersFailover(t *tes
 	c, _ := gin.CreateTestContext(writer)
 
 	body, err := json.Marshal(map[string]any{
-		"model": "gemini-2.5-flash",
+		"model": "gemini-2.5-pro",
 		"messages": []map[string]any{
 			{"role": "user", "content": "hi"},
 		},
@@ -484,7 +484,7 @@ func TestAntigravityGatewayService_Forward_ModelRateLimitTriggersFailover(t *tes
 		},
 		Extra: map[string]any{
 			modelRateLimitsKey: map[string]any{
-				"gemini-2.5-flash": map[string]any{
+				"gemini-2.5-pro": map[string]any{
 					"rate_limit_reset_at": futureResetAt,
 				},
 			},
@@ -568,7 +568,7 @@ func TestAntigravityGatewayService_Forward_StickySessionForceCacheBilling(t *tes
 	c, _ := gin.CreateTestContext(writer)
 
 	body, err := json.Marshal(map[string]any{
-		"model":    "gemini-2.5-flash",
+		"model":    "gemini-2.5-pro",
 		"messages": []map[string]string{{"role": "user", "content": "hello"}},
 	})
 	require.NoError(t, err)
@@ -596,7 +596,7 @@ func TestAntigravityGatewayService_Forward_StickySessionForceCacheBilling(t *tes
 		},
 		Extra: map[string]any{
 			modelRateLimitsKey: map[string]any{
-				"gemini-2.5-flash": map[string]any{
+				"gemini-2.5-pro": map[string]any{
 					"rate_limit_reset_at": futureResetAt,
 				},
 			},
@@ -683,14 +683,14 @@ func TestAntigravityGatewayService_ForwardGemini_ClearsStickySessionOnGeminiRate
 	})
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-3-flash:generateContent", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-2.5-flash:generateContent", bytes.NewReader(body))
 	c.Request = req
 
 	respBody := []byte(`{
 		"error": {
 			"status": "RESOURCE_EXHAUSTED",
 			"details": [
-				{"@type": "type.googleapis.com/google.rpc.ErrorInfo", "metadata": {"model": "gemini-3-flash"}, "reason": "RATE_LIMIT_EXCEEDED"},
+				{"@type": "type.googleapis.com/google.rpc.ErrorInfo", "metadata": {"model": "gemini-2.5-flash"}, "reason": "RATE_LIMIT_EXCEEDED"},
 				{"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "15s"}
 			]
 		}
@@ -731,7 +731,7 @@ func TestAntigravityGatewayService_ForwardGemini_ClearsStickySessionOnGeminiRate
 		context.Background(),
 		c,
 		account,
-		"gemini-3-flash",
+		"gemini-2.5-flash",
 		"generateContent",
 		false,
 		body,
@@ -744,7 +744,7 @@ func TestAntigravityGatewayService_ForwardGemini_ClearsStickySessionOnGeminiRate
 	require.ErrorAs(t, err, &failoverErr)
 	require.Equal(t, http.StatusServiceUnavailable, failoverErr.StatusCode)
 	require.Len(t, repo.modelRateLimitCalls, 2)
-	require.Equal(t, "gemini-3-flash", repo.modelRateLimitCalls[0].modelKey)
+	require.Equal(t, "gemini-2.5-flash", repo.modelRateLimitCalls[0].modelKey)
 	require.Equal(t, antigravityGeminiModelRateLimitKey, repo.modelRateLimitCalls[1].modelKey)
 	require.Len(t, cache.deleteCalls, 1)
 	require.Equal(t, int64(77), cache.deleteCalls[0].groupID)

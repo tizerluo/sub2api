@@ -52,6 +52,9 @@ func TestNewAPIRequestWithURL_普通请求(t *testing.T) {
 	if ua := req.Header.Get("User-Agent"); ua != GetUserAgent() {
 		t.Errorf("User-Agent 不匹配: got %s, want %s", ua, GetUserAgent())
 	}
+	if got := req.Header.Get("X-Goog-Api-Client"); got != "" {
+		t.Errorf("REST request must not claim a Node client: got %q", got)
+	}
 }
 
 func TestNewAPIRequestWithURL_流式请求(t *testing.T) {

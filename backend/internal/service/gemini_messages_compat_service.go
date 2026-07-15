@@ -58,6 +58,13 @@ type GeminiMessagesCompatService struct {
 	tlsFPProfileService       *TLSFingerprintProfileService
 }
 
+func (s *GeminiMessagesCompatService) tlsProfile(account *Account) *tlsfingerprint.Profile {
+	if s == nil || s.tlsFPProfileService == nil {
+		return nil
+	}
+	return s.tlsFPProfileService.ResolveTLSProfile(account)
+}
+
 func (s *GeminiMessagesCompatService) readUpstreamErrorBody(resp *http.Response) []byte {
 	if resp == nil || resp.Body == nil {
 		return nil
@@ -782,11 +789,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 		}
 		requestIDHeader = idHeader
 
-		var profile *tlsfingerprint.Profile
-		if s.tlsFPProfileService != nil {
-			profile = s.tlsFPProfileService.ResolveTLSProfile(account)
-		}
-		resp, err = s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, profile)
+		resp, err = s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, s.tlsProfile(account))
 		if err != nil {
 			safeErr := sanitizeUpstreamErrorMessage(err.Error())
 			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
@@ -1310,11 +1313,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		}
 		requestIDHeader = idHeader
 
-		var profile *tlsfingerprint.Profile
-		if s.tlsFPProfileService != nil {
-			profile = s.tlsFPProfileService.ResolveTLSProfile(account)
-		}
-		resp, err = s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, profile)
+		resp, err = s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, s.tlsProfile(account))
 		if err != nil {
 			safeErr := sanitizeUpstreamErrorMessage(err.Error())
 			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
@@ -2694,11 +2693,7 @@ func (s *GeminiMessagesCompatService) ForwardAIStudioGET(ctx context.Context, ac
 		return nil, fmt.Errorf("unsupported account type: %s", account.Type)
 	}
 
-	var profile *tlsfingerprint.Profile
-	if s.tlsFPProfileService != nil {
-		profile = s.tlsFPProfileService.ResolveTLSProfile(account)
-	}
-	resp, err := s.httpUpstream.DoWithTLS(req, proxyURL, account.ID, account.Concurrency, profile)
+	resp, err := s.httpUpstream.DoWithTLS(req, proxyURL, account.ID, account.Concurrency, s.tlsProfile(account))
 	if err != nil {
 		return nil, err
 	}

@@ -108,22 +108,22 @@ func TestIsModelRateLimited(t *testing.T) {
 			expected:       true,
 		},
 		{
-			name: "antigravity platform - gemini-3-pro-high mapped to gemini-2.5-pro",
+			name: "antigravity platform - gemini-3-pro-preview mapped to gemini-3-pro-high",
 			account: &Account{
 				Platform: PlatformAntigravity,
 				Extra: map[string]any{
 					modelRateLimitsKey: map[string]any{
-						"gemini-2.5-pro": map[string]any{
+						"gemini-3-pro-high": map[string]any{
 							"rate_limit_reset_at": future,
 						},
 					},
 				},
 			},
-			requestedModel: "gemini-3-pro-high",
+			requestedModel: "gemini-3-pro-preview",
 			expected:       true,
 		},
 		{
-			name: "antigravity platform - gemini family rate limit blocks mapped alias",
+			name: "antigravity platform - gemini family rate limit blocks mapped preview",
 			account: &Account{
 				Platform: PlatformAntigravity,
 				Extra: map[string]any{
@@ -134,11 +134,11 @@ func TestIsModelRateLimited(t *testing.T) {
 					},
 				},
 			},
-			requestedModel: "gemini-3-pro-high",
-			expected:       true, // gemini 别名 → gemini-2.5-pro，命中 gemini 家族限流
+			requestedModel: "gemini-3-pro-preview",
+			expected:       true,
 		},
 		{
-			name: "antigravity platform - gemini family rate limit does not block unknown claude",
+			name: "antigravity platform - gemini family rate limit does not block claude",
 			account: &Account{
 				Platform: PlatformAntigravity,
 				Extra: map[string]any{
@@ -149,8 +149,6 @@ func TestIsModelRateLimited(t *testing.T) {
 					},
 				},
 			},
-			// 当前 DefaultAntigravityModelMapping 已无 claude 条目，
-			// claude-* 在 antigravity 平台解析为空（不支持），不会命中限流。
 			requestedModel: "claude-sonnet-4-5",
 			expected:       false,
 		},
@@ -170,19 +168,19 @@ func TestIsModelRateLimited(t *testing.T) {
 			expected:       false, // gemini 平台不走 antigravity 映射
 		},
 		{
-			name: "antigravity platform - gemini alias passthrough hits mapped target rate limit",
+			name: "antigravity platform - claude-opus-4-5-thinking mapped to opus-4-6-thinking",
 			account: &Account{
 				Platform: PlatformAntigravity,
 				Extra: map[string]any{
 					modelRateLimitsKey: map[string]any{
-						"gemini-2.5-flash": map[string]any{
+						"claude-opus-4-6-thinking": map[string]any{
 							"rate_limit_reset_at": future,
 						},
 					},
 				},
 			},
-			requestedModel: "gemini-3-flash",
-			expected:       true, // gemini-3-flash → gemini-2.5-flash
+			requestedModel: "claude-opus-4-5-thinking",
+			expected:       true,
 		},
 		{
 			name: "no scope fallback - claude_sonnet should not match",
@@ -261,13 +259,11 @@ func TestIsModelRateLimited_Antigravity_ThinkingAffectsModelKey(t *testing.T) {
 	now := time.Now()
 	future := now.Add(10 * time.Minute).Format(time.RFC3339)
 
-	// 当前 Antigravity REST 路径只走 Gemini 模型，applyThinkingModelSuffix 恒透传：
-	// 无论 thinking 是否开启，最终限流 key 始终是映射后的 Gemini 模型名（无 thinking 后缀）。
 	account := &Account{
 		Platform: PlatformAntigravity,
 		Extra: map[string]any{
 			modelRateLimitsKey: map[string]any{
-				"gemini-2.5-flash": map[string]any{
+				"claude-sonnet-4-5-thinking": map[string]any{
 					"rate_limit_reset_at": future,
 				},
 			},
@@ -275,8 +271,8 @@ func TestIsModelRateLimited_Antigravity_ThinkingAffectsModelKey(t *testing.T) {
 	}
 
 	ctx := context.WithValue(context.Background(), ctxkey.ThinkingEnabled, true)
-	if !account.isModelRateLimitedWithContext(ctx, "gemini-3-flash") {
-		t.Errorf("expected mapped gemini model to be rate limited")
+	if !account.isModelRateLimitedWithContext(ctx, "claude-sonnet-4-5") {
+		t.Errorf("expected model to be rate limited")
 	}
 }
 
@@ -373,18 +369,18 @@ func TestGetModelRateLimitRemainingTime(t *testing.T) {
 			maxExpected:    0,
 		},
 		{
-			name: "antigravity platform - gemini alias passthrough remaining",
+			name: "antigravity platform - claude-opus-4-5-thinking mapped to opus-4-6-thinking",
 			account: &Account{
 				Platform: PlatformAntigravity,
 				Extra: map[string]any{
 					modelRateLimitsKey: map[string]any{
-						"gemini-2.5-pro": map[string]any{
+						"claude-opus-4-6-thinking": map[string]any{
 							"rate_limit_reset_at": future5m,
 						},
 					},
 				},
 			},
-			requestedModel: "gemini-3-pro-high",
+			requestedModel: "claude-opus-4-5-thinking",
 			minExpected:    4 * time.Minute,
 			maxExpected:    6 * time.Minute,
 		},
@@ -400,7 +396,7 @@ func TestGetModelRateLimitRemainingTime(t *testing.T) {
 					},
 				},
 			},
-			requestedModel: "gemini-3-pro-high",
+			requestedModel: "gemini-3-pro-preview",
 			minExpected:    9 * time.Minute,
 			maxExpected:    11 * time.Minute,
 		},
@@ -457,13 +453,13 @@ func TestGetRateLimitRemainingTime(t *testing.T) {
 				Platform: PlatformAntigravity,
 				Extra: map[string]any{
 					modelRateLimitsKey: map[string]any{
-						"gemini-2.5-pro": map[string]any{
+						"claude-sonnet-4-5": map[string]any{
 							"rate_limit_reset_at": future15m,
 						},
 					},
 				},
 			},
-			requestedModel: "gemini-2.5-pro",
+			requestedModel: "claude-sonnet-4-5",
 			minExpected:    14 * time.Minute,
 			maxExpected:    16 * time.Minute,
 		},
@@ -473,13 +469,13 @@ func TestGetRateLimitRemainingTime(t *testing.T) {
 				Platform: PlatformAntigravity,
 				Extra: map[string]any{
 					modelRateLimitsKey: map[string]any{
-						"gemini-2.5-pro": map[string]any{
+						"claude-sonnet-4-5": map[string]any{
 							"rate_limit_reset_at": future5m,
 						},
 					},
 				},
 			},
-			requestedModel: "gemini-2.5-pro",
+			requestedModel: "claude-sonnet-4-5",
 			minExpected:    4 * time.Minute,
 			maxExpected:    6 * time.Minute,
 		},
@@ -488,7 +484,7 @@ func TestGetRateLimitRemainingTime(t *testing.T) {
 			account: &Account{
 				Platform: PlatformAntigravity,
 			},
-			requestedModel: "gemini-2.5-pro",
+			requestedModel: "claude-sonnet-4-5",
 			minExpected:    0,
 			maxExpected:    0,
 		},

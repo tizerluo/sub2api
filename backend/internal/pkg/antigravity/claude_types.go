@@ -2,7 +2,6 @@ package antigravity
 
 import (
 	"encoding/json"
-	"os"
 	"strings"
 )
 
@@ -152,13 +151,9 @@ type modelDef struct {
 	IsReasoning bool
 }
 
-// Antigravity 通过 REST streamGenerateContent 可用的模型。
-// 注意：agy UI 显示更多模型（含 Claude/GPT-OSS），但那些走 gRPC
-// CloudCode/GenerateChat 路径，sub2api 的 REST 中继不可用。
-// 权威来源：retrieveUserQuota 返回的 modelId（实测 2026-07-04）。
-var claudeModels = []modelDef{}
-var gptossModels = []modelDef{}
-
+// Antigravity REST fallback models. Claude and GPT-OSS shown by agy require
+// CloudCode/GenerateChat and are intentionally not advertised by this REST
+// gateway.
 var geminiModels = []modelDef{
 	{ID: "gemini-2.5-pro", DisplayName: "Gemini 2.5 Pro", CreatedAt: "2025-01-01T00:00:00Z", IsReasoning: true},
 	{ID: "gemini-2.5-flash", DisplayName: "Gemini 2.5 Flash", CreatedAt: "2025-01-01T00:00:00Z"},
@@ -176,37 +171,11 @@ type ClaudeModel struct {
 	CreatedAt   string `json:"created_at"`
 }
 
-// AntigravityModelsEnv 是 Antigravity 自定义模型列表的环境变量名。
-// 格式：逗号分隔的模型 ID（如 "claude-sonnet-4-6,gemini-3-flash"）。
-// 设置后 DefaultModels() 返回自定义列表，覆盖硬编码默认值。
-const AntigravityModelsEnv = "ANTIGRAVITY_MODELS"
-
 // DefaultModels 返回 Claude API 格式的模型列表（Claude + Gemini）
-// 如果设置了 ANTIGRAVITY_MODELS 环境变量，则使用自定义列表覆盖硬编码默认值。
 func DefaultModels() []ClaudeModel {
-	// 检查环境变量覆盖
-	if customModels := os.Getenv(AntigravityModelsEnv); strings.TrimSpace(customModels) != "" {
-		return parseCustomModels(customModels)
-	}
-
-	all := append(append(claudeModels, geminiModels...), gptossModels...)
-	result := make([]ClaudeModel, len(all))
-	for i, m := range all {
+	result := make([]ClaudeModel, len(geminiModels))
+	for i, m := range geminiModels {
 		result[i] = ClaudeModel{ID: m.ID, Type: "model", DisplayName: m.DisplayName, CreatedAt: m.CreatedAt}
-	}
-	return result
-}
-
-// parseCustomModels 将逗号分隔的模型 ID 字符串解析为 ClaudeModel 列表
-func parseCustomModels(models string) []ClaudeModel {
-	parts := strings.Split(models, ",")
-	result := make([]ClaudeModel, 0, len(parts))
-	for _, p := range parts {
-		id := strings.TrimSpace(p)
-		if id == "" {
-			continue
-		}
-		result = append(result, ClaudeModel{ID: id, Type: "model", DisplayName: id})
 	}
 	return result
 }

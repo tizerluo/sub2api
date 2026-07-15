@@ -210,7 +210,7 @@ func TestHandleUpstreamError_429_NonModelRateLimit(t *testing.T) {
 }
 
 // TestHandleUpstreamError_429_NonModelRateLimit_UsesMappedModelKey 测试 429 非模型限流场景
-// 验证：requestedModel 会被映射到 Antigravity 最终模型（例如 gemini-3-flash -> gemini-2.5-flash）
+// 验证：requestedModel 会被映射到 Antigravity 最终模型（例如 claude-opus-4-6 -> claude-opus-4-6-thinking）
 func TestHandleUpstreamError_429_NonModelRateLimit_UsesMappedModelKey(t *testing.T) {
 	repo := &stubAntigravityAccountRepo{}
 	svc := &AntigravityGatewayService{accountRepo: repo}
@@ -218,13 +218,11 @@ func TestHandleUpstreamError_429_NonModelRateLimit_UsesMappedModelKey(t *testing
 
 	body := buildGeminiRateLimitBody("5s")
 
-	result := svc.handleUpstreamError(context.Background(), "[test]", account, http.StatusTooManyRequests, http.Header{}, body, "gemini-3-flash", 0, "", false)
+	result := svc.handleUpstreamError(context.Background(), "[test]", account, http.StatusTooManyRequests, http.Header{}, body, "claude-opus-4-6", 0, "", false)
 
 	require.Nil(t, result)
-	// Gemini 模型会同时设置模型级 key 和 antigravity:gemini 聚合 key
-	require.Len(t, repo.modelRateLimitCalls, 2)
-	require.Equal(t, "gemini-2.5-flash", repo.modelRateLimitCalls[0].modelKey)
-	require.Equal(t, "antigravity:gemini", repo.modelRateLimitCalls[1].modelKey)
+	require.Len(t, repo.modelRateLimitCalls, 1)
+	require.Equal(t, "claude-opus-4-6-thinking", repo.modelRateLimitCalls[0].modelKey)
 }
 
 // TestHandleUpstreamError_503_ModelCapacityExhausted 测试 503 模型容量不足场景
@@ -879,7 +877,7 @@ func TestAntigravityRetryLoop_PreCheck_SwitchesWhenRateLimited(t *testing.T) {
 		Concurrency: 1,
 		Extra: map[string]any{
 			modelRateLimitsKey: map[string]any{
-				"gemini-2.5-flash": map[string]any{
+				"claude-sonnet-4-5": map[string]any{
 					"rate_limit_reset_at": time.Now().Add(2 * time.Second).Format(time.RFC3339),
 				},
 			},
@@ -894,7 +892,7 @@ func TestAntigravityRetryLoop_PreCheck_SwitchesWhenRateLimited(t *testing.T) {
 		accessToken:     "token",
 		action:          "generateContent",
 		body:            []byte(`{"input":"test"}`),
-		requestedModel:  "gemini-2.5-flash",
+		requestedModel:  "claude-sonnet-4-5",
 		httpUpstream:    upstream,
 		isStickySession: true,
 		handleError: func(ctx context.Context, prefix string, account *Account, statusCode int, headers http.Header, body []byte, requestedModel string, groupID int64, sessionHash string, isStickySession bool) *handleModelRateLimitResult {
@@ -906,7 +904,7 @@ func TestAntigravityRetryLoop_PreCheck_SwitchesWhenRateLimited(t *testing.T) {
 	var switchErr *AntigravityAccountSwitchError
 	require.ErrorAs(t, err, &switchErr)
 	require.Equal(t, account.ID, switchErr.OriginalAccountID)
-	require.Equal(t, "gemini-2.5-flash", switchErr.RateLimitedModel)
+	require.Equal(t, "claude-sonnet-4-5", switchErr.RateLimitedModel)
 	require.True(t, switchErr.IsStickySession)
 	require.Equal(t, 0, upstream.calls, "should not call upstream when switching on pre-check")
 }
@@ -922,7 +920,7 @@ func TestAntigravityRetryLoop_PreCheck_SwitchesWhenRemainingLong(t *testing.T) {
 		Concurrency: 1,
 		Extra: map[string]any{
 			modelRateLimitsKey: map[string]any{
-				"gemini-2.5-flash": map[string]any{
+				"claude-sonnet-4-5": map[string]any{
 					"rate_limit_reset_at": time.Now().Add(11 * time.Second).Format(time.RFC3339),
 				},
 			},
@@ -937,7 +935,7 @@ func TestAntigravityRetryLoop_PreCheck_SwitchesWhenRemainingLong(t *testing.T) {
 		accessToken:     "token",
 		action:          "generateContent",
 		body:            []byte(`{"input":"test"}`),
-		requestedModel:  "gemini-2.5-flash",
+		requestedModel:  "claude-sonnet-4-5",
 		httpUpstream:    upstream,
 		isStickySession: true,
 		handleError: func(ctx context.Context, prefix string, account *Account, statusCode int, headers http.Header, body []byte, requestedModel string, groupID int64, sessionHash string, isStickySession bool) *handleModelRateLimitResult {
@@ -949,7 +947,7 @@ func TestAntigravityRetryLoop_PreCheck_SwitchesWhenRemainingLong(t *testing.T) {
 	var switchErr *AntigravityAccountSwitchError
 	require.ErrorAs(t, err, &switchErr)
 	require.Equal(t, account.ID, switchErr.OriginalAccountID)
-	require.Equal(t, "gemini-2.5-flash", switchErr.RateLimitedModel)
+	require.Equal(t, "claude-sonnet-4-5", switchErr.RateLimitedModel)
 	require.True(t, switchErr.IsStickySession)
 	require.Equal(t, 0, upstream.calls, "should not call upstream when switching on pre-check")
 }

@@ -68,29 +68,15 @@ const (
 	SubscriptionStatusSuspended = "suspended"
 )
 
-// AntigravityGemini31ProAgentModel is the upstream route for Gemini 3.1 Pro High.
-const AntigravityGemini31ProAgentModel = "gemini-pro-agent"
-
-// DefaultAntigravityModelMapping 是 Antigravity 平台的默认模型映射。
-// 实测 2026-07-04：通过 REST streamGenerateContent 可用的 4 个 Gemini 模型
-// （retrieveUserQuota 权威确认）。Claude/GPT-OSS 走 gRPC 路径，REST 不可用。
+// DefaultAntigravityModelMapping is the REST fallback used only when an
+// Antigravity account has no explicit model_mapping. agy also exposes Claude
+// and GPT-OSS through CloudCode/GenerateChat, but this gateway only speaks
+// the v1internal generateContent REST protocol.
 var DefaultAntigravityModelMapping = map[string]string{
-	// === REST 可用的 4 个 Gemini 模型 ===
 	"gemini-2.5-pro":        "gemini-2.5-pro",
 	"gemini-2.5-flash":      "gemini-2.5-flash",
 	"gemini-2.5-flash-lite": "gemini-2.5-flash-lite",
 	"gemini-3.1-flash-lite": "gemini-3.1-flash-lite",
-
-	// === agy UI 标签 → REST 模型 ID 映射 ===
-	// agy UI 显示这些标签，但 REST 端点用 Gemini 2.5 系列 ID
-	"gemini-3.1-pro-high":            "gemini-2.5-pro",
-	"gemini-3.1-pro-low":             "gemini-2.5-pro",
-	"gemini-3-flash":                 "gemini-2.5-flash",
-	AntigravityGemini31ProAgentModel: "gemini-2.5-pro",
-	"gemini-3.1-pro":                 "gemini-2.5-pro",
-	"gemini-3.1-pro-preview":         "gemini-2.5-pro",
-	"gemini-3-pro-high":              "gemini-2.5-pro",
-	"gemini-3-pro-low":               "gemini-2.5-pro",
 }
 
 // DefaultBedrockModelMapping 是 AWS Bedrock 平台的默认模型映射

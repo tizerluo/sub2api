@@ -33,10 +33,9 @@ func TestGatewayService_isModelSupportedByAccount_AntigravityModelMapping(t *tes
 	require.True(t, svc.isModelSupportedByAccount(account, "gemini-3-flash"))
 	require.True(t, svc.isModelSupportedByAccount(account, "gemini-3-pro-high"))
 
-	// gemini-2.5-* 由 ensureAntigravityDefaultPassthroughs 自动注入为透传，
-	// 因此即使未显式配置 model_mapping 也被视为支持。
-	require.True(t, svc.isModelSupportedByAccount(account, "gemini-2.5-flash"))
-	require.True(t, svc.isModelSupportedByAccount(account, "gemini-2.5-pro"))
+	// gemini-2.5-* 不匹配（不在 model_mapping 中）
+	require.False(t, svc.isModelSupportedByAccount(account, "gemini-2.5-flash"))
+	require.False(t, svc.isModelSupportedByAccount(account, "gemini-2.5-pro"))
 
 	// 其他平台模型不支持
 	require.False(t, svc.isModelSupportedByAccount(account, "gpt-4"))
@@ -55,16 +54,15 @@ func TestGatewayService_isModelSupportedByAccount_AntigravityNoMapping(t *testin
 		Credentials: map[string]any{},
 	}
 
-	// 默认映射中的模型应该被支持（当前 DefaultAntigravityModelMapping 仅含 Gemini 模型）
-	require.True(t, svc.isModelSupportedByAccount(account, "gemini-3-flash"))
+	// 默认 REST 映射中的模型应该被支持
 	require.True(t, svc.isModelSupportedByAccount(account, "gemini-2.5-pro"))
 	require.True(t, svc.isModelSupportedByAccount(account, "gemini-2.5-flash"))
+	require.True(t, svc.isModelSupportedByAccount(account, "gemini-2.5-flash-lite"))
+	require.True(t, svc.isModelSupportedByAccount(account, "gemini-3.1-flash-lite"))
 
-	// claude-* 已不在默认映射（REST 不可用），应不被支持
-	require.False(t, svc.isModelSupportedByAccount(account, "claude-sonnet-4-5"))
-	require.False(t, svc.isModelSupportedByAccount(account, "claude-haiku-4-5"))
-
-	// 不在默认映射中的模型不被支持
+	// gRPC-only 和未知模型不在默认 REST 映射中
+	require.False(t, svc.isModelSupportedByAccount(account, "claude-sonnet-4-6"))
+	require.False(t, svc.isModelSupportedByAccount(account, "gemini-3-flash"))
 	require.False(t, svc.isModelSupportedByAccount(account, "claude-3-5-sonnet-20241022"))
 	require.False(t, svc.isModelSupportedByAccount(account, "claude-unknown-model"))
 
@@ -107,16 +105,15 @@ func TestGatewayService_isModelSupportedByAccountWithContext_ThinkingMode(t *tes
 			expected:        false,
 		},
 		// 场景 3: 配置 claude-sonnet-4-5（非 thinking），请求 claude-sonnet-4-5 + thinking=true
-		// 当前 applyThinkingModelSuffix 不再添加 thinking 后缀（直接透传），
-		// 因此 claude-sonnet-4-5 命中 mapping 即通过。
+		// 最终模型名 = claude-sonnet-4-5-thinking，不在 mapping 中，应该不匹配
 		{
-			name: "thinking_enabled_non_thinking_mapping_passthrough",
+			name: "thinking_enabled_no_match_non_thinking_mapping",
 			modelMapping: map[string]any{
 				"claude-sonnet-4-5": "claude-sonnet-4-5",
 			},
 			requestedModel:  "claude-sonnet-4-5",
 			thinkingEnabled: true,
-			expected:        true,
+			expected:        false,
 		},
 		// 场景 4: 配置两种模型，请求 claude-sonnet-4-5 + thinking=true，应该匹配 thinking 版本
 		{

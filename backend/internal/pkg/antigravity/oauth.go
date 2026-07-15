@@ -16,7 +16,6 @@ import (
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
 )
 
 const (
@@ -26,10 +25,7 @@ const (
 	UserInfoURL  = "https://www.googleapis.com/oauth2/v2/userinfo"
 
 	// Antigravity OAuth 客户端凭证
-	// 使用 Gemini CLI 官方公开 OAuth client（与 geminicli 包保持一致）。
-	// 旧的 Antigravity IDE client_id（1071006060591-...）已被 Google 弃用，
-	// 签发的 token 会被 cloudcode-pa.googleapis.com 拒绝（401 Invalid bearer token）。
-	ClientID = geminicli.GeminiCLIOAuthClientID
+	ClientID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
 
 	// AntigravityOAuthClientSecretEnv 是 Antigravity OAuth client_secret 的环境变量名。
 	AntigravityOAuthClientSecretEnv = "ANTIGRAVITY_OAUTH_CLIENT_SECRET"
@@ -38,18 +34,17 @@ const (
 	AntigravityUserAgentVersionEnv = "ANTIGRAVITY_USER_AGENT_VERSION"
 
 	// DefaultUserAgentVersion 是未通过环境变量或后台设置覆盖时使用的默认版本号。
-	// 必须匹配当前 Antigravity CLI (agy) 的版本号——Google 在 streamGenerateContent
-	// 端点检查 User-Agent，只允许 agy/* 格式的 UA（2026-06-18 Gemini CLI 停服后加的检测）。
-	// antigravity/* 格式的 UA 会被 403 拒绝。
-	DefaultUserAgentVersion = "1.0.16"
+	DefaultUserAgentVersion = "1.23.2"
 
 	// 固定的 redirect_uri（用户需手动复制 code）
 	RedirectURI = "http://localhost:8085/callback"
 
-	// OAuth scopes（对齐 Gemini CLI Code Assist scopes）
-	// 移除 cclog 和 experimentsandconfigs——这两个 scope 属于旧版 Antigravity IDE client，
-	// Gemini CLI 官方 client 不支持，会导致授权失败。
-	Scopes = geminicli.DefaultCodeAssistScopes
+	// OAuth scopes
+	Scopes = "https://www.googleapis.com/auth/cloud-platform " +
+		"https://www.googleapis.com/auth/userinfo.email " +
+		"https://www.googleapis.com/auth/userinfo.profile " +
+		"https://www.googleapis.com/auth/cclog " +
+		"https://www.googleapis.com/auth/experimentsandconfigs"
 
 	// Session 过期时间
 	SessionTTL = 30 * time.Minute
@@ -75,8 +70,7 @@ var (
 )
 
 // defaultClientSecret 可通过环境变量 ANTIGRAVITY_OAUTH_CLIENT_SECRET 配置
-// 默认与 Gemini CLI 官方 client_secret 保持一致（公开凭证，GOCSPX- 前缀）。
-var defaultClientSecret = geminicli.GeminiCLIOAuthClientSecret
+var defaultClientSecret = "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"
 
 func init() {
 	// 从环境变量读取版本号，未设置则使用默认值
@@ -127,14 +121,11 @@ func GetUserAgentVersionForContext(ctx context.Context) string {
 }
 
 // BuildUserAgent 使用指定版本号构造 User-Agent；版本为空或非法时回退默认值。
-// 格式为 agy/<version>——匹配 Antigravity CLI (agy) 的 UA 格式。
-// Google 的 streamGenerateContent 端点只允许 agy/* 格式的 UA（2026-06-18 后），
-// antigravity/* 格式会被 403 拒绝。
 func BuildUserAgent(version string) string {
 	if normalized := NormalizeUserAgentVersion(version); normalized != "" {
-		return fmt.Sprintf("agy/%s", normalized)
+		return fmt.Sprintf("antigravity/%s windows/amd64", normalized)
 	}
-	return fmt.Sprintf("agy/%s", defaultUserAgentVersion)
+	return fmt.Sprintf("antigravity/%s windows/amd64", defaultUserAgentVersion)
 }
 
 // GetUserAgentForContext 返回当前请求应使用的 User-Agent。

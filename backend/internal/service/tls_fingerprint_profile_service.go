@@ -173,7 +173,8 @@ func (s *TLSFingerprintProfileService) getRandomProfile() *tlsfingerprint.Profil
 // 逻辑：
 //  1. 未启用 TLS 指纹 → 返回 nil（不伪装）
 //  2. 启用 + 绑定了 profile_id → 从缓存查找对应 profile
-//  3. 启用 + 未绑定或找不到 → 返回空 Profile（使用代码内置默认值）
+//  3. Anthropic OAuth/SetupToken 启用但未绑定 → 使用 Node.js 内置 profile
+//  4. 其他平台未绑定 → 返回 nil（标准 Go TLS）
 func (s *TLSFingerprintProfileService) ResolveTLSProfile(account *Account) *tlsfingerprint.Profile {
 	if account == nil || !account.IsTLSFingerprintEnabled() {
 		return nil
@@ -190,8 +191,10 @@ func (s *TLSFingerprintProfileService) ResolveTLSProfile(account *Account) *tlsf
 			return p
 		}
 	}
-	// TLS 启用但无绑定 profile → 空 Profile → dialer 使用内置默认值
-	return &tlsfingerprint.Profile{Name: "Built-in Default (Node.js 24.x)"}
+	if account.IsAnthropicOAuthOrSetupToken() {
+		return &tlsfingerprint.Profile{Name: "Built-in Default (Node.js 24.x)"}
+	}
+	return nil
 }
 
 // --- 缓存管理 ---

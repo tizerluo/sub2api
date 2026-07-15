@@ -70,9 +70,19 @@ type Account struct {
 	modelMappingCacheRawPtr         uintptr
 	modelMappingCacheRawLen         int
 	modelMappingCacheRawSig         uint64
+
+	// header_overrides 热路径缓存（非持久化字段，同 model_mapping 缓存先例）
+	headerOverrideCache               map[string]string
+	headerOverrideCacheReady          bool
+	headerOverrideCacheCredentialsPtr uintptr
+	headerOverrideCacheRawPtr         uintptr
+	headerOverrideCacheRawLen         int
+	headerOverrideCacheRawSig         uint64
 }
 
 type OpenAIEndpointCapability string
+
+const openAILongContextBillingEnabledKey = "openai_long_context_billing_enabled"
 
 const (
 	OpenAIEndpointCapabilityChatCompletions OpenAIEndpointCapability = "chat_completions"
@@ -574,15 +584,6 @@ func (a *Account) resolveModelMapping(rawMapping map[string]any) map[string]stri
 		}
 	}
 	if len(result) > 0 {
-		if a.Platform == domain.PlatformAntigravity {
-			ensureAntigravityDefaultPassthroughs(result, []string{
-				"gemini-2.5-pro",
-				"gemini-2.5-flash",
-				"gemini-2.5-flash-lite",
-				"gemini-3.1-flash-lite",
-			})
-			applyAntigravityGemini31ProAliases(result)
-		}
 		return result
 	}
 
@@ -627,82 +628,6 @@ func modelMappingSignature(rawMapping map[string]any) uint64 {
 	return h.Sum64()
 }
 
-func ensureAntigravityDefaultPassthrough(mapping map[string]string, model string) {
-	if mapping == nil || model == "" {
-		return
-	}
-	if _, exists := mapping[model]; exists {
-		return
-	}
-	for pattern := range mapping {
-		if matchWildcard(pattern, model) {
-			return
-		}
-	}
-	mapping[model] = model
-}
-
-func ensureAntigravityDefaultPassthroughs(mapping map[string]string, models []string) {
-	for _, model := range models {
-		ensureAntigravityDefaultPassthrough(mapping, model)
-	}
-}
-
-func applyAntigravityGemini31ProAliases(mapping map[string]string) {
-	target := strings.TrimSpace(mapping[domain.AntigravityGemini31ProAgentModel])
-	if target == "" {
-		return
-	}
-
-	aliases := []struct {
-		model         string
-		legacyTargets map[string]struct{}
-	}{
-		{
-			model: "gemini-3.1-pro",
-			legacyTargets: map[string]struct{}{
-				"gemini-3.1-pro": {},
-			},
-		},
-		{
-			model: "gemini-3.1-pro-high",
-			legacyTargets: map[string]struct{}{
-				"gemini-3.1-pro-high": {},
-			},
-		},
-		{
-			model: "gemini-3.1-pro-preview",
-			legacyTargets: map[string]struct{}{
-				"gemini-3.1-pro-preview": {},
-				"gemini-3.1-pro-high":    {},
-			},
-		},
-	}
-
-	for _, alias := range aliases {
-		current, exists := mapping[alias.model]
-		if exists {
-			if _, legacy := alias.legacyTargets[current]; legacy {
-				mapping[alias.model] = target
-			}
-			continue
-		}
-		if mappingHasWildcardForModel(mapping, alias.model) {
-			continue
-		}
-		mapping[alias.model] = target
-	}
-}
-
-func mappingHasWildcardForModel(mapping map[string]string, model string) bool {
-	for pattern := range mapping {
-		if matchWildcard(pattern, model) {
-			return true
-		}
-	}
-	return false
-}
-
 func normalizeRequestedModelForLookup(platform, requestedModel string) string {
 	trimmed := strings.TrimSpace(requestedModel)
 	if trimmed == "" {
@@ -743,10 +668,19 @@ func resolveRequestedModelInMapping(mapping map[string]string, requestedModel st
 }
 
 // IsModelSupported 检查模型是否在 model_mapping 中（支持通配符）
-// 如果未配置 mapping，返回 true（允许所有模型）
+// 如果未配置 mapping，返回 true（允许所有模型）。
+//
+// 例外：OpenAI OAuth 账号（Codex 上游）的空映射会排除明确属于其他厂商
+// 家族的模型（deepseek-*/glm-* 等）——转发阶段 normalizeOpenAIModelForUpstream
+// 会把未知模型原样透传，Codex 上游对这类模型必然返回不可重试的 400，导致
+// 请求卡死在该账号上、无法 failover 到真正支持该模型的 API Key 账号（#3662）。
+// 未知/自定义别名仍保持允许（兼容渠道级映射），见 isOpenAIOAuthServableModel。
 func (a *Account) IsModelSupported(requestedModel string) bool {
 	mapping := a.GetModelMapping()
 	if len(mapping) == 0 {
+		if a.IsOpenAIOAuth() && !a.IsOpenAIPassthroughEnabled() {
+			return isOpenAIOAuthServableModel(requestedModel)
+		}
 		return true // 无映射 = 允许所有
 	}
 	if mappingSupportsRequestedModel(mapping, requestedModel) {
@@ -1175,12 +1109,32 @@ func (a *Account) IsOpenAI() bool {
 	return a.Platform == PlatformOpenAI
 }
 
+func (a *Account) IsOpenAILongContextBillingEnabled() bool {
+	if a == nil || !a.IsOpenAI() || a.Extra == nil {
+		return false
+	}
+	enabled, ok := a.Extra[openAILongContextBillingEnabledKey].(bool)
+	return ok && enabled
+}
+
 func (a *Account) IsAnthropic() bool {
 	return a.Platform == PlatformAnthropic
 }
 
 func (a *Account) IsOpenAIOAuth() bool {
 	return a.IsOpenAI() && a.Type == AccountTypeOAuth
+}
+
+func (a *Account) IsOpenAIChatGPTSubscription() bool {
+	if !a.IsOpenAIOAuth() {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(a.GetCredential("plan_type"))) {
+	case "", "free", "abnormal":
+		return false
+	default:
+		return true
+	}
 }
 
 func (a *Account) IsOpenAIPersonalAccessToken() bool {
@@ -1222,15 +1176,39 @@ func (a *Account) GetOpenAIRefreshToken() string {
 	return a.GetCredential("refresh_token")
 }
 
+// GetGrokBaseURL selects the upstream used by Grok text and Responses traffic.
+// Grok media traffic has a different transport contract and must use
+// GetGrokMediaBaseURL instead.
 func (a *Account) GetGrokBaseURL() string {
 	if !a.IsGrok() {
 		return ""
+	}
+	if a.IsGrokOAuth() {
+		// OAuth bearer credentials are subscription credentials and may only be
+		// sent to the supported CLI gateway. Stored base_url values and unsafe
+		// development overrides apply exclusively to API-key accounts.
+		return xai.DefaultCLIBaseURL
 	}
 	baseURL := a.GetCredential("base_url")
 	if baseURL != "" {
 		return baseURL
 	}
 	return xai.DefaultBaseURL
+}
+
+// GetGrokMediaBaseURL selects the upstream used by Grok Imagine APIs.
+//
+// OAuth media credentials have the same trust boundary as OAuth text traffic:
+// they are pinned to the supported CLI gateway even for large request bodies.
+// API-key accounts retain their configured public/custom upstream behavior.
+func (a *Account) GetGrokMediaBaseURL() string {
+	if !a.IsGrok() {
+		return ""
+	}
+	if a.IsGrokOAuth() {
+		return xai.DefaultCLIBaseURL
+	}
+	return a.GetGrokBaseURL()
 }
 
 func (a *Account) GetGrokAccessToken() string {
@@ -1262,9 +1240,7 @@ func (a *Account) GetOpenAIApiKey() string {
 }
 
 func (a *Account) GetOpenAIUserAgent() string {
-	// 允许 OpenAI 和 Grok 账号使用 per-account UA override。
-	// 之前只有 IsOpenAI() 生效，Grok 被排除——导致 Grok 账号即使用了 extra 设置 UA 也不生效。
-	if !a.IsOpenAI() && a.Platform != PlatformGrok {
+	if !a.IsOpenAI() {
 		return ""
 	}
 	return a.GetCredential("user_agent")
@@ -1751,14 +1727,9 @@ func (a *Account) IsAnthropicOAuthOrSetupToken() bool {
 	return a.Platform == PlatformAnthropic && (a.Type == AccountTypeOAuth || a.Type == AccountTypeSetupToken)
 }
 
-// IsTLSFingerprintEnabled 检查是否启用 TLS 指纹伪装
-// 适用于所有 OAuth/SetupToken/apikey 类型账号（之前仅限 Anthropic）。
-// 启用后将模拟指定客户端的 TLS 握手特征，避免 Go 标准库裸指纹被上游识别。
+// IsTLSFingerprintEnabled checks the explicit per-account switch. The caller
+// decides whether a built-in or an account-bound profile is appropriate.
 func (a *Account) IsTLSFingerprintEnabled() bool {
-	// 支持 Anthropic/OpenAI/Gemini/Antigravity/Grok 的 OAuth/SetupToken/apikey 账号
-	if !a.IsOAuthLikeAccount() {
-		return false
-	}
 	if a.Extra == nil {
 		return false
 	}
@@ -1768,14 +1739,6 @@ func (a *Account) IsTLSFingerprintEnabled() bool {
 		}
 	}
 	return false
-}
-
-// IsOAuthLikeAccount 判断是否为支持 TLS 指纹伪装的账号类型
-// （OAuth/SetupToken/apikey，排除 upstream/bedrock 等透传类型）
-func (a *Account) IsOAuthLikeAccount() bool {
-	return a.Type == AccountTypeOAuth ||
-		a.Type == AccountTypeSetupToken ||
-		a.Type == AccountTypeAPIKey
 }
 
 // GetTLSFingerprintProfileID 获取账号绑定的 TLS 指纹模板 ID
