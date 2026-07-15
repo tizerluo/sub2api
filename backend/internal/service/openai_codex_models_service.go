@@ -16,6 +16,7 @@ import (
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/httpclient"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	"golang.org/x/net/http2"
 	"golang.org/x/sync/singleflight"
 )
@@ -137,6 +138,7 @@ type codexModelsManifestRequest struct {
 	credentialAccountID int64
 	accountConcurrency  int
 	useAPIKeyUpstream   bool
+	tlsProfile          *tlsfingerprint.Profile
 }
 
 type codexModelsManifestCacheEntry struct {
@@ -310,6 +312,7 @@ func (s *OpenAIGatewayService) FetchCodexModelsManifest(ctx context.Context, acc
 		credentialAccountID: credAccount.ID,
 		accountConcurrency:  account.Concurrency,
 		useAPIKeyUpstream:   useAPIKeyUpstream,
+		tlsProfile:          s.tlsProfile(account),
 	}
 	if useAPIKeyUpstream {
 		return s.fetchCachedAPIKeyCodexModelsManifest(ctx, request, ifNoneMatch)
@@ -385,7 +388,7 @@ func (s *OpenAIGatewayService) fetchCodexModelsManifestUpstream(ctx context.Cont
 			return nil, infraerrors.New(http.StatusInternalServerError, "OPENAI_CODEX_MODELS_UPSTREAM_NOT_CONFIGURED", "Codex models upstream HTTP client is not configured")
 		}
 		req = req.WithContext(WithHTTPUpstreamProfile(req.Context(), HTTPUpstreamProfileOpenAI))
-		resp, err = s.httpUpstream.Do(req, request.proxyURL, request.accountID, request.accountConcurrency)
+		resp, err = s.httpUpstream.DoWithTLS(req, request.proxyURL, request.accountID, request.accountConcurrency, request.tlsProfile)
 	} else {
 		client, clientErr := httpclient.GetClient(httpclient.Options{
 			ProxyURL:              request.proxyURL,
