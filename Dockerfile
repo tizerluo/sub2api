@@ -34,6 +34,8 @@ RUN pnpm install --frozen-lockfile
 # Copy only that subtree to keep the build dependency minimal.
 COPY frontend/ ./
 COPY docs/legal/ /app/docs/legal/
+# vue-tsc 类型检查内存消耗大，2GB VPS 需提高 V8 堆上限
+ENV NODE_OPTIONS="--max-old-space-size=1536"
 RUN pnpm run build
 
 # -----------------------------------------------------------------------------
