@@ -11,7 +11,6 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 	"github.com/tiktoken-go/tokenizer"
@@ -90,11 +89,7 @@ func (s *OpenAIGatewayService) ForwardCountTokensAsAnthropic(
 	if account.Proxy != nil {
 		proxyURL = account.Proxy.URL()
 	}
-	var profile *tlsfingerprint.Profile
-	if s.tlsFPProfileService != nil {
-		profile = s.tlsFPProfileService.ResolveTLSProfile(account)
-	}
-	resp, err := s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, profile)
+	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 	if err != nil {
 		safeErr := sanitizeUpstreamErrorMessage(err.Error())
 		setOpsUpstreamError(c, 0, safeErr, "")
@@ -220,7 +215,15 @@ func (s *OpenAIGatewayService) buildInputTokensUpstreamRequest(
 		return nil, err
 	}
 	req = req.WithContext(WithHTTPUpstreamProfile(req.Context(), HTTPUpstreamProfileOpenAI))
-	req.Header.Set("authorization", "Bearer "+token)
+	authHeaders, err := s.buildOpenAIAuthenticationHeaders(ctx, account, token)
+	if err != nil {
+		return nil, err
+	}
+	for key, values := range authHeaders {
+		for _, value := range values {
+			req.Header.Add(key, value)
+		}
+	}
 	req.Header.Set("content-type", "application/json")
 	req.Header.Set("accept", "application/json")
 
@@ -235,6 +238,9 @@ func (s *OpenAIGatewayService) buildInputTokensUpstreamRequest(
 			}
 		}
 	}
+
+	// 账号级请求头覆写（仅 openai api_key 账号启用时生效；OAuth 路径 no-op）
+	account.ApplyHeaderOverrides(req.Header)
 
 	return req, nil
 }

@@ -23,7 +23,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/googleapi"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
 
@@ -55,7 +54,6 @@ type GeminiMessagesCompatService struct {
 	antigravityGatewayService *AntigravityGatewayService
 	cfg                       *config.Config
 	responseHeaderFilter      *responseheaders.CompiledHeaderFilter
-	tlsFPProfileService       *TLSFingerprintProfileService
 }
 
 func (s *GeminiMessagesCompatService) readUpstreamErrorBody(resp *http.Response) []byte {
@@ -80,7 +78,6 @@ func NewGeminiMessagesCompatService(
 	httpUpstream HTTPUpstream,
 	antigravityGatewayService *AntigravityGatewayService,
 	cfg *config.Config,
-	tlsFPProfileService *TLSFingerprintProfileService,
 ) *GeminiMessagesCompatService {
 	return &GeminiMessagesCompatService{
 		accountRepo:               accountRepo,
@@ -93,7 +90,6 @@ func NewGeminiMessagesCompatService(
 		antigravityGatewayService: antigravityGatewayService,
 		cfg:                       cfg,
 		responseHeaderFilter:      compileResponseHeaderFilter(cfg),
-		tlsFPProfileService:       tlsFPProfileService,
 	}
 }
 
@@ -782,11 +778,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 		}
 		requestIDHeader = idHeader
 
-		var profile *tlsfingerprint.Profile
-		if s.tlsFPProfileService != nil {
-			profile = s.tlsFPProfileService.ResolveTLSProfile(account)
-		}
-		resp, err = s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, profile)
+		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 		if err != nil {
 			safeErr := sanitizeUpstreamErrorMessage(err.Error())
 			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
@@ -1310,11 +1302,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		}
 		requestIDHeader = idHeader
 
-		var profile *tlsfingerprint.Profile
-		if s.tlsFPProfileService != nil {
-			profile = s.tlsFPProfileService.ResolveTLSProfile(account)
-		}
-		resp, err = s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, profile)
+		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 		if err != nil {
 			safeErr := sanitizeUpstreamErrorMessage(err.Error())
 			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
@@ -2694,11 +2682,7 @@ func (s *GeminiMessagesCompatService) ForwardAIStudioGET(ctx context.Context, ac
 		return nil, fmt.Errorf("unsupported account type: %s", account.Type)
 	}
 
-	var profile *tlsfingerprint.Profile
-	if s.tlsFPProfileService != nil {
-		profile = s.tlsFPProfileService.ResolveTLSProfile(account)
-	}
-	resp, err := s.httpUpstream.DoWithTLS(req, proxyURL, account.ID, account.Concurrency, profile)
+	resp, err := s.httpUpstream.Do(req, proxyURL, account.ID, account.Concurrency)
 	if err != nil {
 		return nil, err
 	}

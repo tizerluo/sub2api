@@ -31,7 +31,22 @@ type fakeSchedulerCache struct {
 func (f *fakeSchedulerCache) GetSnapshot(_ context.Context, _ service.SchedulerBucket) ([]*service.Account, bool, error) {
 	return f.accounts, true, nil
 }
-func (f *fakeSchedulerCache) SetSnapshot(_ context.Context, _ service.SchedulerBucket, _ []service.Account) error {
+func (f *fakeSchedulerCache) CaptureBucketWriteToken(_ context.Context, bucket service.SchedulerBucket) (service.SchedulerBucketWriteToken, error) {
+	return service.SchedulerBucketWriteToken{Bucket: bucket, Epoch: 1}, nil
+}
+func (f *fakeSchedulerCache) SetSnapshot(_ context.Context, _ service.SchedulerBucket, _ service.SchedulerBucketWriteToken, _ []service.Account) error {
+	return nil
+}
+func (f *fakeSchedulerCache) RetireBucket(_ context.Context, _ service.SchedulerBucket) error {
+	return nil
+}
+func (f *fakeSchedulerCache) ReopenBucket(_ context.Context, bucket service.SchedulerBucket) (service.SchedulerBucketWriteToken, error) {
+	return service.SchedulerBucketWriteToken{Bucket: bucket, Epoch: 1}, nil
+}
+func (f *fakeSchedulerCache) TryAcquireGroupLifecycleLease(_ context.Context, _ int64, _ time.Duration) (service.SchedulerGroupLifecycleLease, bool, error) {
+	return service.SchedulerGroupLifecycleLease{}, false, nil
+}
+func (f *fakeSchedulerCache) ReleaseGroupLifecycleLease(_ context.Context, _ service.SchedulerGroupLifecycleLease) error {
 	return nil
 }
 func (f *fakeSchedulerCache) GetAccount(_ context.Context, id int64) (*service.Account, error) {
@@ -237,7 +252,7 @@ func TestGatewayHandlerMessages_InterceptWarmup_AntigravityAccount_MixedScheduli
 	c, _ := gin.CreateTestContext(rec)
 
 	body := []byte(`{
-		"model": "gemini-2.5-flash",
+		"model": "claude-sonnet-4-5",
 		"max_tokens": 256,
 		"messages": [{"role":"user","content":[{"type":"text","text":"Warmup"}]}]
 	}`)
@@ -274,7 +289,7 @@ func TestGatewayHandlerMessages_InterceptWarmup_AntigravityAccount_MixedScheduli
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.Equal(t, "msg_mock_warmup", resp["id"])
-	require.Equal(t, "gemini-2.5-flash", resp["model"])
+	require.Equal(t, "claude-sonnet-4-5", resp["model"])
 
 	content, ok := resp["content"].([]any)
 	require.True(t, ok)
@@ -320,7 +335,7 @@ func TestGatewayHandlerMessages_InterceptWarmup_AntigravityAccount_ForcePlatform
 	c, _ := gin.CreateTestContext(rec)
 
 	body := []byte(`{
-		"model": "gemini-2.5-flash",
+		"model": "claude-sonnet-4-5",
 		"max_tokens": 256,
 		"messages": [{"role":"user","content":[{"type":"text","text":"Warmup"}]}]
 	}`)
@@ -363,5 +378,5 @@ func TestGatewayHandlerMessages_InterceptWarmup_AntigravityAccount_ForcePlatform
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.Equal(t, "msg_mock_warmup", resp["id"])
-	require.Equal(t, "gemini-2.5-flash", resp["model"])
+	require.Equal(t, "claude-sonnet-4-5", resp["model"])
 }

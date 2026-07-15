@@ -10,7 +10,6 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 )
 
 const (
@@ -193,11 +192,7 @@ func (s *AntigravityGatewayService) attemptCreditsOveragesRetry(
 		return &creditsOveragesRetryResult{handled: true}
 	}
 
-	var creditsProfile *tlsfingerprint.Profile
-	if p.tlsFPProfileService != nil {
-		creditsProfile = p.tlsFPProfileService.ResolveTLSProfile(p.account)
-	}
-	creditsResp, err := p.httpUpstream.DoWithTLS(creditsReq, p.proxyURL, p.account.ID, p.account.Concurrency, creditsProfile)
+	creditsResp, err := p.httpUpstream.Do(creditsReq, p.proxyURL, p.account.ID, p.account.Concurrency)
 	if err == nil && creditsResp != nil && creditsResp.StatusCode < 400 {
 		s.clearCreditsExhausted(p.ctx, p.account)
 		logger.LegacyPrintf("service.antigravity_gateway", "%s status=%d credit_overages_success model=%s account=%d",

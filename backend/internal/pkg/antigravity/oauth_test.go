@@ -11,8 +11,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
 )
 
 // ---------------------------------------------------------------------------
@@ -679,20 +677,20 @@ func TestConstants_值正确(t *testing.T) {
 	if UserInfoURL != "https://www.googleapis.com/oauth2/v2/userinfo" {
 		t.Errorf("UserInfoURL 不匹配: got %s", UserInfoURL)
 	}
-	if ClientID != geminicli.GeminiCLIOAuthClientID {
+	if ClientID != "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com" {
 		t.Errorf("ClientID 不匹配: got %s", ClientID)
 	}
 	secret, err := getClientSecret()
 	if err != nil {
 		t.Fatalf("getClientSecret 应返回默认值，但报错: %v", err)
 	}
-	if secret != geminicli.GeminiCLIOAuthClientSecret {
+	if secret != "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" {
 		t.Errorf("默认 client_secret 不匹配: got %s", secret)
 	}
 	if RedirectURI != "http://localhost:8085/callback" {
 		t.Errorf("RedirectURI 不匹配: got %s", RedirectURI)
 	}
-	if GetUserAgent() != "agy/1.0.16" {
+	if GetUserAgent() != "antigravity/1.23.2 windows/amd64" {
 		t.Errorf("UserAgent 不匹配: got %s", GetUserAgent())
 	}
 	if SessionTTL != 30*time.Minute {
@@ -704,11 +702,12 @@ func TestConstants_值正确(t *testing.T) {
 }
 
 func TestScopes_包含必要范围(t *testing.T) {
-	// Scopes 对齐为 Gemini CLI DefaultCodeAssistScopes（移除了 cclog/experimentsandconfigs）
 	expectedScopes := []string{
 		"https://www.googleapis.com/auth/cloud-platform",
 		"https://www.googleapis.com/auth/userinfo.email",
 		"https://www.googleapis.com/auth/userinfo.profile",
+		"https://www.googleapis.com/auth/cclog",
+		"https://www.googleapis.com/auth/experimentsandconfigs",
 	}
 
 	for _, scope := range expectedScopes {

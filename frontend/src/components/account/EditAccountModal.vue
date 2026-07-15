@@ -41,10 +41,12 @@
                   ? 'https://generativelanguage.googleapis.com'
                   : account.platform === 'antigravity'
                     ? 'https://cloudcode-pa.googleapis.com'
-                    : 'https://api.anthropic.com'
+                    : account.platform === 'grok'
+                      ? 'https://api.x.ai/v1'
+                      : 'https://api.anthropic.com'
             "
           />
-          <p class="input-hint">{{ baseUrlHint }}</p>
+          <p v-if="baseUrlHint" class="input-hint">{{ baseUrlHint }}</p>
         </div>
         <div>
           <label class="input-label">{{ t('admin.accounts.apiKey') }}</label>
@@ -63,7 +65,9 @@
                   ? 'AIza...'
                   : account.platform === 'antigravity'
                     ? 'sk-...'
-                    : 'sk-ant-...'
+                    : account.platform === 'grok'
+                      ? 'xai-...'
+                      : 'sk-ant-...'
             "
           />
           <p class="input-hint">{{ t('admin.accounts.leaveEmptyToKeep') }}</p>
@@ -414,6 +418,110 @@
                 {{ t('admin.accounts.noneSelectedUsesDefault') }}
               </span>
             </div>
+          </div>
+        </div>
+
+        <!-- Header Override Section (anthropic/openai apikey only) -->
+        <div
+          v-if="isHeaderOverridePlatform(account.platform)"
+          class="border-t border-gray-200 pt-4 dark:border-dark-600"
+        >
+          <div class="mb-3 flex items-center justify-between">
+            <div>
+              <label class="input-label mb-0">{{ t('admin.accounts.headerOverride.title') }}</label>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.accounts.headerOverride.hint') }}
+              </p>
+            </div>
+            <button
+              type="button"
+              @click="headerOverrideEnabled = !headerOverrideEnabled"
+              :class="[
+                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+                headerOverrideEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+              ]"
+            >
+              <span
+                :class="[
+                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                  headerOverrideEnabled ? 'translate-x-5' : 'translate-x-0'
+                ]"
+              />
+            </button>
+          </div>
+
+          <div v-if="headerOverrideEnabled" class="space-y-3">
+            <div class="rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
+              <p class="text-xs text-blue-700 dark:text-blue-400">
+                <Icon name="exclamationCircle" size="sm" class="mr-1 inline" :stroke-width="2" />
+                {{ t('admin.accounts.headerOverride.info') }}
+              </p>
+            </div>
+
+            <div v-if="headerOverrideRows.length > 0" class="space-y-2">
+              <div
+                v-for="(row, index) in headerOverrideRows"
+                :key="getHeaderOverrideRowKey(row)"
+                class="flex items-center gap-2"
+              >
+                <input
+                  v-model="row.name"
+                  type="text"
+                  class="input flex-1"
+                  :placeholder="t('admin.accounts.headerOverride.namePlaceholder')"
+                />
+                <input
+                  v-model="row.value"
+                  type="text"
+                  class="input flex-1"
+                  :placeholder="t('admin.accounts.headerOverride.valuePlaceholder')"
+                />
+                <button
+                  type="button"
+                  @click="removeHeaderOverrideRow(index)"
+                  class="rounded-lg p-2 text-red-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                >
+                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              @click="addHeaderOverrideRow"
+              class="w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300"
+            >
+              <svg class="mr-1 inline h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 4v16m8-8H4"
+                />
+              </svg>
+              {{ t('admin.accounts.headerOverride.addRow') }}
+            </button>
+
+            <div class="flex flex-wrap gap-2">
+              <button
+                type="button"
+                @click="fillHeaderOverrideTemplate"
+                class="rounded-lg bg-primary-50 px-3 py-1 text-xs text-primary-700 transition-colors hover:bg-primary-100 dark:bg-primary-900/30 dark:text-primary-400 dark:hover:bg-primary-900/50"
+              >
+                + {{ t('admin.accounts.headerOverride.fillTemplate') }}
+              </button>
+            </div>
+
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.headerOverride.emptyValueHint') }}
+            </p>
           </div>
         </div>
 
@@ -1678,7 +1786,39 @@
         />
       </div>
 
-      <!-- OpenAI OAuth Codex 官方客户端限制开关 -->
+      <!-- OpenAI API 长上下文计费开关 -->
+      <div
+        v-if="account?.platform === 'openai' && !isSparkShadow && (account?.type === 'oauth' || account?.type === 'setup-token' || account?.type === 'apikey')"
+        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+      >
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <label class="input-label mb-0">{{ t('admin.accounts.openai.longContextBilling') }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.openai.longContextBillingDesc') }}
+            </p>
+          </div>
+          <button
+            type="button"
+            data-testid="openai-long-context-billing-toggle"
+            role="switch"
+            :aria-checked="openAILongContextBillingEnabled"
+            @click="openAILongContextBillingEnabled = !openAILongContextBillingEnabled"
+            :class="[
+              'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+              openAILongContextBillingEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+            ]"
+          >
+            <span
+              :class="[
+                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                openAILongContextBillingEnabled ? 'translate-x-5' : 'translate-x-0'
+              ]"
+            />
+          </button>
+        </div>
+      </div>
+
       <div
         v-if="account?.platform === 'openai' && (account?.type === 'oauth' || account?.type === 'setup-token')"
         class="border-t border-gray-200 pt-4 dark:border-dark-600"
@@ -1731,6 +1871,24 @@
               ]"
             />
           </button>
+        </div>
+      </div>
+
+      <!-- OpenAI 订阅档位手动覆盖（Plus/Pro/Free），仅 OAuth 非影子账号 -->
+      <div
+        v-if="account?.platform === 'openai' && account?.type === 'oauth' && !isSparkShadow"
+        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+      >
+        <div class="flex items-center justify-between gap-4">
+          <div class="min-w-0">
+            <label class="input-label mb-0">{{ t('admin.accounts.openai.planType') }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.openai.planTypeDesc') }}
+            </p>
+          </div>
+          <div class="w-44 flex-shrink-0">
+            <Select v-model="editPlanType" :options="planTypeOptions" />
+          </div>
         </div>
       </div>
 
@@ -2433,7 +2591,18 @@ import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.
 import QuotaLimitCard from '@/components/account/QuotaLimitCard.vue'
 import {
   applyAntigravityProjectID,
-  applyInterceptWarmup
+  applyHeaderOverride,
+  applyInterceptWarmup,
+  applyPlanType,
+  buildPlanTypeOptions,
+  readPlanType,
+  getHeaderOverrideTemplate,
+  isHeaderOverridePlatform,
+  splitHeaderOverridesObject,
+  validateHeaderOverrideRows,
+  HEADER_OVERRIDE_ENABLED_CREDENTIAL_KEY,
+  HEADER_OVERRIDES_CREDENTIAL_KEY,
+  type HeaderOverrideRow
 } from '@/components/account/credentialsBuilder'
 import { formatDateTime, formatDateTimeLocalInput, parseDateTimeLocalInput } from '@/utils/format'
 import { createStableObjectKeyResolver } from '@/utils/stableObjectKey'
@@ -2482,6 +2651,7 @@ const baseUrlHint = computed(() => {
   if (!props.account) return t('admin.accounts.baseUrlHint')
   if (props.account.platform === 'openai') return t('admin.accounts.openai.baseUrlHint')
   if (props.account.platform === 'gemini') return t('admin.accounts.gemini.baseUrlHint')
+  if (props.account.platform === 'grok') return ''
   return t('admin.accounts.baseUrlHint')
 })
 
@@ -2564,6 +2734,30 @@ function formatPoolModeRetryStatusCodes(value: unknown): string {
 const customErrorCodesEnabled = ref(false)
 const selectedErrorCodes = ref<number[]>([])
 const customErrorCodeInput = ref<number | null>(null)
+const headerOverrideEnabled = ref(false)
+const headerOverrideRows = ref<HeaderOverrideRow[]>([])
+
+const addHeaderOverrideRow = () => {
+  headerOverrideRows.value.push({ name: '', value: '' })
+}
+
+const removeHeaderOverrideRow = (index: number) => {
+  headerOverrideRows.value.splice(index, 1)
+}
+
+// 模板按钮：填入标准客户端请求头名称（值留空），跳过已存在的同名行
+const fillHeaderOverrideTemplate = () => {
+  const existing = new Set(
+    headerOverrideRows.value.map((row) => row.name.trim().toLowerCase()).filter(Boolean)
+  )
+  const rows = headerOverrideRows.value.filter((row) => row.name.trim() || row.value.trim())
+  for (const row of getHeaderOverrideTemplate(props.account?.platform || '')) {
+    if (!existing.has(row.name)) {
+      rows.push(row)
+    }
+  }
+  headerOverrideRows.value = rows
+}
 const interceptWarmupRequests = ref(false)
 const autoPauseOnExpired = ref(false)
 const autoPause5hThreshold = ref<number | null>(null)
@@ -2580,6 +2774,7 @@ const isSyncingAntigravityUpstream = ref(false)
 const tempUnschedEnabled = ref(false)
 const tempUnschedRules = ref<TempUnschedRuleForm[]>([])
 const getModelMappingKey = createStableObjectKeyResolver<ModelMapping>('edit-model-mapping')
+const getHeaderOverrideRowKey = createStableObjectKeyResolver<HeaderOverrideRow>('edit-header-override-row')
 const getOpenAICompactModelMappingKey = createStableObjectKeyResolver<ModelMapping>('edit-openai-compact-model-mapping')
 const getAntigravityModelMappingKey = createStableObjectKeyResolver<ModelMapping>('edit-antigravity-model-mapping')
 const getTempUnschedRuleKey = createStableObjectKeyResolver<TempUnschedRuleForm>('edit-temp-unsched-rule')
@@ -2620,6 +2815,9 @@ const customBaseUrl = ref('')
 
 // OpenAI 自动透传开关（OAuth/API Key）
 const openaiPassthroughEnabled = ref(false)
+const openAILongContextBillingEnabled = ref(false)
+// OpenAI 订阅档位（Plus/Pro/Free）手动覆盖值,存于 credentials.plan_type;'' 表示清空/自动识别
+const editPlanType = ref<string>('')
 const openAICompactMode = ref<OpenAICompactMode>('auto')
 const openAIResponsesMode = ref<OpenAIResponsesMode>('auto')
 const openAIEndpointCapabilities = ref<OpenAIEndpointCapability[]>(['chat_completions', 'embeddings'])
@@ -2747,6 +2945,10 @@ const openAICompactModeOptions = computed(() => [
   { value: 'force_on', label: t('admin.accounts.openai.compactModeForceOn') },
   { value: 'force_off', label: t('admin.accounts.openai.compactModeForceOff') }
 ])
+// OpenAI 订阅档位手动覆盖选项(清空 + Plus/Pro/Free;别名/自定义值友好显示且保留 canonical)
+const planTypeOptions = computed(() =>
+  buildPlanTypeOptions(editPlanType.value, t('admin.accounts.openai.planTypeClear'))
+)
 const openAIResponsesModeOptions = computed(() => [
   { value: 'auto', label: t('admin.accounts.openai.responsesModeAuto') },
   { value: 'force_responses', label: t('admin.accounts.openai.responsesModeForceResponses') },
@@ -2906,6 +3108,7 @@ const tempUnschedPresets = computed(() => [
 const defaultBaseUrl = computed(() => {
   if (props.account?.platform === 'openai') return 'https://api.openai.com'
   if (props.account?.platform === 'gemini') return 'https://generativelanguage.googleapis.com'
+  if (props.account?.platform === 'grok') return 'https://api.x.ai/v1'
   return 'https://api.anthropic.com'
 })
 
@@ -3046,6 +3249,8 @@ const syncFormFromAccount = (newAccount: Account | null) => {
 
   // Load OpenAI passthrough toggle (OpenAI OAuth/SetupToken/API Key)
   openaiPassthroughEnabled.value = false
+  openAILongContextBillingEnabled.value = false
+  editPlanType.value = ''
   openAICompactMode.value = 'auto'
   openAIResponsesMode.value = 'auto'
   openAIEndpointCapabilities.value = ['chat_completions', 'embeddings']
@@ -3060,6 +3265,12 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   webSearchEmulationMode.value = 'default'
   if (newAccount.platform === 'openai' && (newAccount.type === 'oauth' || newAccount.type === 'setup-token' || newAccount.type === 'apikey')) {
     openaiPassthroughEnabled.value = extra?.openai_passthrough === true || extra?.openai_oauth_passthrough === true
+    const longContextBillingValue = extra?.openai_long_context_billing_enabled
+    openAILongContextBillingEnabled.value = longContextBillingValue === true
+    // plan_type 手动覆盖仅 OAuth 有实际调度语义(IsOpenAIChatGPTSubscription 要求 oauth),故只对 oauth 回填
+    editPlanType.value = newAccount.type === 'oauth'
+      ? readPlanType(newAccount.credentials as Record<string, unknown> | undefined)
+      : ''
     openAICompactMode.value = (extra?.openai_compact_mode as OpenAICompactMode) || 'auto'
     if (newAccount.type === 'apikey') {
       openAIResponsesMode.value = normalizeOpenAIResponsesMode(extra?.openai_responses_mode)
@@ -3186,6 +3397,10 @@ const syncFormFromAccount = (newAccount: Account | null) => {
 
   loadTempUnschedRules(credentials)
 
+  // Reset header override state (loaded below only for apikey accounts)
+  headerOverrideEnabled.value = false
+  headerOverrideRows.value = []
+
   // Initialize API Key fields for apikey type
   if (newAccount.type === 'apikey' && newAccount.credentials) {
     const credentials = newAccount.credentials as Record<string, unknown>
@@ -3194,7 +3409,9 @@ const syncFormFromAccount = (newAccount: Account | null) => {
         ? 'https://api.openai.com'
         : newAccount.platform === 'gemini'
           ? 'https://generativelanguage.googleapis.com'
-          : 'https://api.anthropic.com'
+          : newAccount.platform === 'grok'
+            ? 'https://api.x.ai/v1'
+            : 'https://api.anthropic.com'
     editBaseUrl.value = (credentials.base_url as string) || platformDefaultUrl
 
     // Load model mappings and detect mode
@@ -3215,6 +3432,14 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     } else {
       selectedErrorCodes.value = []
     }
+
+    // Load header override (anthropic/openai apikey only)
+    headerOverrideEnabled.value =
+      isHeaderOverridePlatform(newAccount.platform) &&
+      credentials[HEADER_OVERRIDE_ENABLED_CREDENTIAL_KEY] === true
+    headerOverrideRows.value = splitHeaderOverridesObject(
+      credentials[HEADER_OVERRIDES_CREDENTIAL_KEY]
+    )
   } else if (newAccount.type === 'bedrock' && newAccount.credentials) {
     const bedrockCreds = newAccount.credentials as Record<string, unknown>
     const authMode = (bedrockCreds.auth_mode as string) || 'sigv4'
@@ -3262,7 +3487,9 @@ const syncFormFromAccount = (newAccount: Account | null) => {
         ? 'https://api.openai.com'
         : newAccount.platform === 'gemini'
           ? 'https://generativelanguage.googleapis.com'
-          : 'https://api.anthropic.com'
+          : newAccount.platform === 'grok'
+            ? 'https://api.x.ai/v1'
+            : 'https://api.anthropic.com'
     editBaseUrl.value = platformDefaultUrl
 
     // Load model mappings for OpenAI/Grok OAuth accounts
@@ -3850,6 +4077,18 @@ const handleSubmit = async () => {
         delete newCredentials.custom_error_codes
       }
 
+      // Add header override if enabled (anthropic/openai apikey only)
+      if (isHeaderOverridePlatform(props.account.platform)) {
+        if (headerOverrideEnabled.value) {
+          const headerError = validateHeaderOverrideRows(headerOverrideRows.value)
+          if (headerError) {
+            appStore.showError(t(`admin.accounts.headerOverride.${headerError}`))
+            return
+          }
+        }
+        applyHeaderOverride(newCredentials, headerOverrideEnabled.value, headerOverrideRows.value, 'edit')
+      }
+
       // Add intercept warmup requests setting
       applyInterceptWarmup(newCredentials, interceptWarmupRequests.value, 'edit')
       if (!applyTempUnschedConfig(newCredentials)) {
@@ -4012,6 +4251,14 @@ const handleSubmit = async () => {
       }
 
       updatePayload.credentials = newCredentials
+    }
+
+    // OpenAI: 手动覆盖订阅档位 plan_type（Plus/Pro/Free）。仅 OAuth 非影子账号：
+    // 影子账号凭据由母账号管理(且后端会 sanitize),setup-token 无订阅调度语义。
+    if (props.account.platform === 'openai' && props.account.type === 'oauth' && !isSparkShadow.value) {
+      const currentCredentials = (updatePayload.credentials as Record<string, unknown>) ||
+        ((props.account.credentials as Record<string, unknown>) || {})
+      updatePayload.credentials = applyPlanType({ ...currentCredentials }, editPlanType.value)
     }
 
     // Antigravity: persist model mapping to credentials (applies to all antigravity types)
@@ -4189,6 +4436,11 @@ const handleSubmit = async () => {
       } else {
         delete newExtra.openai_passthrough
         delete newExtra.openai_oauth_passthrough
+      }
+      if (isSparkShadow.value) {
+        delete newExtra.openai_long_context_billing_enabled
+      } else {
+        newExtra.openai_long_context_billing_enabled = openAILongContextBillingEnabled.value
       }
       if (openAICompactMode.value === 'auto') {
         delete newExtra.openai_compact_mode

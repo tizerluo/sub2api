@@ -503,11 +503,14 @@ func TestAccountGetModelMapping_AntigravityEnsuresGeminiDefaultPassthroughs(t *t
 	}
 
 	mapping := account.GetModelMapping()
-	// ensureAntigravityDefaultPassthroughs 只填充 4 个 REST 可用模型（与 account.go ensureAntigravityDefaultPassthroughs 列表一致）
-	for _, m := range []string{"gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.1-flash-lite"} {
-		if mapping[m] != m {
-			t.Fatalf("expected %s passthrough to be auto-filled, got: %q", m, mapping[m])
-		}
+	if mapping["gemini-3-flash"] != "gemini-3-flash" {
+		t.Fatalf("expected gemini-3-flash passthrough to be auto-filled, got: %q", mapping["gemini-3-flash"])
+	}
+	if mapping["gemini-3.1-pro-high"] != "gemini-3.1-pro-high" {
+		t.Fatalf("expected gemini-3.1-pro-high passthrough to be auto-filled, got: %q", mapping["gemini-3.1-pro-high"])
+	}
+	if mapping["gemini-3.1-pro-low"] != "gemini-3.1-pro-low" {
+		t.Fatalf("expected gemini-3.1-pro-low passthrough to be auto-filled, got: %q", mapping["gemini-3.1-pro-low"])
 	}
 }
 

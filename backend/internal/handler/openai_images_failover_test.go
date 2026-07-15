@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -79,10 +78,6 @@ func (u *openAIImagesFailoverHTTPUpstream) Do(_ *http.Request, _ string, account
 	}, nil
 }
 
-func (u *openAIImagesFailoverHTTPUpstream) DoWithTLS(req *http.Request, proxyURL string, accountID int64, accountConcurrency int, _ *tlsfingerprint.Profile) (*http.Response, error) {
-	return u.Do(req, proxyURL, accountID, accountConcurrency)
-}
-
 func (u *openAIImagesFailoverHTTPUpstream) calls() []int64 {
 	u.mu.Lock()
 	defer u.mu.Unlock()
@@ -142,7 +137,6 @@ func TestOpenAIGatewayHandlerImages_ServerErrorFailsOverAndReturnsClearErrorWhen
 		nil,
 		nil,
 		nil,
-		nil, // tlsFPProfileService
 	)
 	billingService := service.NewBillingCacheService(nil, nil, nil, nil, nil, nil, cfg, nil)
 	t.Cleanup(billingService.Stop)
